@@ -1,0 +1,27 @@
+
+# Python environment
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# Dataset files
+data/raw/
+data/processed/
+*.pcap
+*.pcapng
+*.csv
+
+# Trained models
+models/
+*.joblib
+*.pkl
+
+# Secrets
+.env
+.env.*
+
+# Editor and OS files
+.vscode/
+.DS_Store
+Thumbs.db
