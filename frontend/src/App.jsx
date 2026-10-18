@@ -1,0 +1,692 @@
+
+import { useMemo, useState } from "react";
+import {
+  ShieldCheck,
+  Activity,
+  Network,
+  AlertTriangle,
+  Upload,
+  LayoutDashboard,
+  FileWarning,
+  CheckCircle2,
+  Zap,
+  RefreshCw,
+  Server,
+  Download,
+} from "lucide-react";
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+  PieChart,
+  Pie,
+  Cell,
+} from "recharts";
+import "./App.css";
+
+const API_URL = "http://127.0.0.1:8000";
+
+const PIE_COLORS = ["#4de0b2", "#ff7e8a"];
+const BAR_COLOR = "#4de0b2";
+
+function StatCard({ icon: Icon, title, value, subtitle, color }) {
+  return (
+    <div className="stat-card">
+      <div className="stat-top">
+        <span>{title}</span>
+        <span className="stat-icon" style={{ color }}>
+          <Icon size={20} />
+        </span>
+      </div>
+      <div className="stat-value">{value}</div>
+      <div className="stat-subtitle">{subtitle}</div>
+    </div>
+  );
+}
+
+function formatValue(value) {
+  if (value === null || value === undefined) return "—";
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? Number(value.toFixed(5)).toString() : "—";
+  }
+  return String(value);
+}
+
+function isTrue(value) {
+  return value === true || value === 1 || String(value).toLowerCase() === "true";
+}
+
+function downloadCSV(rows, columns) {
+  if (!rows?.length || !columns?.length) return;
+
+  const escapeCell = (value) =>
+    `"${formatValue(value).replaceAll('"', '""')}"`;
+
+  const csv = [
+    columns.map(escapeCell).join(","),
+    ...rows.map((row) =>
+      columns.map((column) => escapeCell(row[column])).join(",")
+    ),
+  ].join("\r\n");
+
+  const blob = new Blob(["\uFEFF", csv], {
+    type: "text/csv;charset=utf-8;",
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "sentinelai_detection_results.csv";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+export default function App() {
+  const [file, setFile] = useState(null);
+  const [results, setResults] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [apiStatus, setApiStatus] = useState("Checking");
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState("all");
+
+  async function checkAPI() {
+    setApiStatus("Checking");
+
+    try {
+      const response = await fetch(`${API_URL}/health`);
+      if (!response.ok) throw new Error("API unavailable");
+
+      const data = await response.json();
+      setApiStatus(data.detector_ready ? "Online" : "Models unavailable");
+    } catch {
+      setApiStatus("Offline");
+    }
+  }
+
+  async function analyzeFile() {
+    if (!file || loading) return;
+
+    setLoading(true);
+    setError("");
+    setResults(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch(`${API_URL}/analyze`, {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.detail || "Analysis failed.");
+      }
+
+      setResults(data);
+    } catch (err) {
+      setError(
+        err.message ||
+          "Could not connect to the Python API. Check that it is running."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleFile(event) {
+    setFile(event.target.files?.[0] ?? null);
+    setResults(null);
+    setError("");
+    setSearch("");
+    setFilter("all");
+  }
+
+  // All statistics below are derived from the API response.
+  const classCounts = results?.class_counts ?? {};
+
+  const sortedClasses = useMemo(
+    () =>
+      Object.entries(classCounts)
+        .map(([name, count]) => ({ name, count: Number(count) || 0 }))
+        .sort((a, b) => b.count - a.count),
+    [classCounts]
+  );
+
+  const benignCount = useMemo(() => {
+    const entry = sortedClasses.find(
+      (item) => item.name.trim().toLowerCase() === "benign"
+    );
+    return entry?.count ?? 0;
+  }, [sortedClasses]);
+
+  const predictedNonBenign = Math.max(
+    0,
+    sortedClasses.reduce((sum, item) => sum + item.count, 0) - benignCount
+  );
+
+  const attackClasses = sortedClasses.filter(
+    (item) => item.name.trim().toLowerCase() !== "benign"
+  );
+
+  const anomalyCount = Number(results?.anomaly_count ?? 0);
+  const totalFlows = Number(results?.total_flows ?? 0);
+  const normalByIsolationForest = Math.max(0, totalFlows - anomalyCount);
+
+  const classChartData = sortedClasses.slice(0, 8).map((item) => ({
+    name:
+      item.name.length > 19 ? `${item.name.slice(0, 17)}…` : item.name,
+    fullName: item.name,
+    flows: item.count,
+  }));
+
+  const anomalyChartData = results
+    ? [
+        { name: "Not flagged", value: normalByIsolationForest },
+        { name: "Anomalies", value: anomalyCount },
+      ]
+    : [];
+
+  const filteredRows = useMemo(() => {
+    if (!results?.results) return [];
+
+    return results.results.filter((row) => {
+      const predicted = String(
+        row.predicted_class ?? row.hybrid_status ?? ""
+      ).trim().toLowerCase();
+
+      const anomaly = isTrue(row.is_anomaly);
+
+      const matchesFilter =
+        filter === "all" ||
+        (filter === "anomaly" && anomaly) ||
+        (filter === "attack" && predicted !== "benign" && predicted !== "");
+
+      const matchesSearch =
+        !search ||
+        Object.values(row).some((value) =>
+          String(value ?? "").toLowerCase().includes(search.toLowerCase())
+        );
+
+      return matchesFilter && matchesSearch;
+    });
+  }, [results, filter, search]);
+
+  const resultColumns = results?.columns ?? [];
+
+  return (
+    <div className="app-shell">
+      <aside className="sidebar">
+        <div className="brand">
+          <div className="brand-logo">
+            <ShieldCheck size={25} />
+          </div>
+          <div>
+            <h2>Sentinel<span>AI</span></h2>
+            <p>NETWORK DEFENSE</p>
+          </div>
+        </div>
+
+        <div className="nav-label">WORKSPACE</div>
+        <a className="nav-item active" href="#dashboard">
+          <LayoutDashboard size={18} /> Dashboard
+        </a>
+        <a className="nav-item" href="#traffic">
+          <Network size={18} /> Prediction Charts
+        </a>
+        <a className="nav-item" href="#threats">
+          <FileWarning size={18} /> Threat Detection
+        </a>
+        <a className="nav-item" href="#analyze">
+          <Upload size={18} /> Analyze Dataset
+        </a>
+
+        <div className="sidebar-bottom">
+          <div className="system-status">
+            <span
+              className={`status-dot ${
+                apiStatus === "Online" ? "" : "status-warning"
+              }`}
+            />
+            <div>
+              <strong>{apiStatus === "Online" ? "Models Online" : apiStatus}</strong>
+              <small>Python detection service</small>
+            </div>
+          </div>
+          <p className="version">HYBRID NIDS · DEVELOPMENT</p>
+        </div>
+      </aside>
+
+      <main className="main-content" id="dashboard">
+        <header className="topbar">
+          <div>
+            <p className="eyebrow">SECURITY OPERATIONS CENTER</p>
+            <h1>Network Overview</h1>
+          </div>
+          <button className="api-button" onClick={checkAPI}>
+            <RefreshCw size={15} />
+            <span>API: {apiStatus}</span>
+          </button>
+        </header>
+
+        <section className="welcome-panel">
+          <div>
+            <div className="welcome-tag">
+              <Zap size={14} /> AI-POWERED SECURITY
+            </div>
+            <h2>Network Intelligence, <span>Reimagined.</span></h2>
+            <p>
+              Analyze network flows with your trained Random Forest and
+              Isolation Forest models.
+            </p>
+          </div>
+          <div className="welcome-art">
+            <ShieldCheck size={92} strokeWidth={1} />
+          </div>
+        </section>
+
+        <section className="stats-grid">
+          <StatCard
+            icon={Activity}
+            title="Analyzed Flows"
+            value={results ? totalFlows.toLocaleString() : "—"}
+            subtitle={results ? results.filename : "Upload a CSV to begin"}
+            color="#66e3bf"
+          />
+          <StatCard
+            icon={AlertTriangle}
+            title="Non-Benign Predictions"
+            value={results ? predictedNonBenign.toLocaleString() : "—"}
+            subtitle="Based on predicted classes"
+            color="#ffb86b"
+          />
+          <StatCard
+            icon={ShieldCheck}
+            title="Detection Models"
+            value="02"
+            subtitle="Random Forest + Isolation Forest"
+            color="#a99bff"
+          />
+          <StatCard
+            icon={CheckCircle2}
+            title="Anomalies"
+            value={results ? anomalyCount.toLocaleString() : "—"}
+            subtitle={
+              results && totalFlows
+                ? `${((anomalyCount / totalFlows) * 100).toFixed(2)}% flagged`
+                : "Awaiting analysis"
+            }
+            color="#65b9ff"
+          />
+        </section>
+
+        <section className="charts-grid" id="traffic">
+          <div className="panel traffic-panel">
+            <div className="panel-heading">
+              <div>
+                <h3>Predicted Class Distribution</h3>
+                <p>
+                  {results
+                    ? "Actual Random Forest prediction counts"
+                    : "Upload a CSV to populate this chart"}
+                </p>
+              </div>
+              <span className="panel-chip">
+                {results ? "MODEL RESULTS" : "NO DATA"}
+              </span>
+            </div>
+
+            {results && classChartData.length > 0 ? (
+              <>
+                <div className="chart-area">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={classChartData}
+                      margin={{ top: 8, right: 10, left: 0, bottom: 35 }}
+                    >
+                      <CartesianGrid
+                        stroke="#233345"
+                        strokeDasharray="4 4"
+                        vertical={false}
+                      />
+                      <XAxis
+                        dataKey="name"
+                        stroke="#71839a"
+                        tickLine={false}
+                        axisLine={false}
+                        interval={0}
+                        angle={-25}
+                        textAnchor="end"
+                        height={60}
+                        tick={{ fontSize: 10 }}
+                      />
+                      <YAxis
+                        stroke="#71839a"
+                        tickLine={false}
+                        axisLine={false}
+                        tick={{ fontSize: 10 }}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          background: "#101c2a",
+                          border: "1px solid #2a3b50",
+                          borderRadius: 8,
+                        }}
+                        formatter={(value) => [
+                          Number(value).toLocaleString(),
+                          "Predicted flows",
+                        ]}
+                        labelFormatter={(label, payload) =>
+                          payload?.[0]?.payload?.fullName ?? label
+                        }
+                      />
+                      <Bar
+                        dataKey="flows"
+                        name="Predicted flows"
+                        fill={BAR_COLOR}
+                        radius={[5, 5, 0, 0]}
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+                <p className="chart-note">
+                  Showing up to eight most frequent predicted classes.
+                </p>
+              </>
+            ) : (
+              <div className="empty-state">
+                Class distribution will appear here after a successful analysis.
+              </div>
+            )}
+          </div>
+
+          <div className="panel distribution-panel">
+            <div className="panel-heading">
+              <div>
+                <h3>Anomaly Distribution</h3>
+                <p>
+                  {results
+                    ? "Actual Isolation Forest flags"
+                    : "Upload a CSV to populate this chart"}
+                </p>
+              </div>
+            </div>
+
+            {results ? (
+              <>
+                <div className="donut-wrap">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={anomalyChartData}
+                        dataKey="value"
+                        nameKey="name"
+                        innerRadius={62}
+                        outerRadius={88}
+                        paddingAngle={4}
+                        stroke="none"
+                      >
+                        {anomalyChartData.map((entry, index) => (
+                          <Cell
+                            key={entry.name}
+                            fill={PIE_COLORS[index % PIE_COLORS.length]}
+                          />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        contentStyle={{
+                          background: "#101c2a",
+                          border: "1px solid #2a3b50",
+                          borderRadius: 8,
+                        }}
+                        formatter={(value) => [
+                          Number(value).toLocaleString(),
+                          "Flows",
+                        ]}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="donut-center">
+                    <strong>
+                      {totalFlows
+                        ? `${((anomalyCount / totalFlows) * 100).toFixed(1)}%`
+                        : "0%"}
+                    </strong>
+                    <span>Flagged anomalous</span>
+                  </div>
+                </div>
+
+                <div className="legend">
+                  {anomalyChartData.map((item, index) => (
+                    <span key={item.name}>
+                      <i
+                        style={{
+                          background: PIE_COLORS[index % PIE_COLORS.length],
+                        }}
+                      />
+                      {item.name}: {item.value.toLocaleString()}
+                    </span>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="empty-state">
+                Anomaly and non-anomaly counts will appear here after analysis.
+              </div>
+            )}
+          </div>
+        </section>
+
+        <section className="bottom-grid">
+          <div className="panel threats-panel" id="threats">
+            <div className="panel-heading">
+              <div>
+                <h3>Predicted Attack Categories</h3>
+                <p>
+                  {results
+                    ? "Actual predictions returned by the detector"
+                    : "Upload a dataset to show predictions"}
+                </p>
+              </div>
+              <AlertTriangle size={19} />
+            </div>
+
+            {results ? (
+              attackClasses.length > 0 ? (
+                <div className="threat-list">
+                  {attackClasses.map(({ name, count }) => (
+                    <div className="threat-row" key={name}>
+                      <div className="threat-symbol">
+                        <AlertTriangle size={17} />
+                      </div>
+                      <div className="threat-name">
+                        <strong>{name}</strong>
+                        <small>Predicted flows</small>
+                      </div>
+                      <strong className="threat-count">
+                        {count.toLocaleString()}
+                      </strong>
+                      <span className="severity high">Predicted</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="empty-state">
+                  No non-benign predicted classes were returned.
+                </div>
+              )
+            ) : (
+              <div className="empty-state">
+                No analysis yet. Upload a compatible network-flow CSV.
+              </div>
+            )}
+          </div>
+
+          <div className="panel upload-panel" id="analyze">
+            <div className="panel-heading">
+              <div>
+                <h3>Analyze a Dataset</h3>
+                <p>Run your trained Python models</p>
+              </div>
+              <Upload size={19} />
+            </div>
+
+            <label className="drop-zone">
+              <Upload size={27} />
+              <strong>{file ? file.name : "Choose a CSV file"}</strong>
+              <span>
+                {file
+                  ? `${(file.size / 1024 / 1024).toFixed(2)} MB`
+                  : "CIC-IDS2017 or compatible CSV"}
+              </span>
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                onChange={handleFile}
+              />
+            </label>
+
+            <button
+              className="analyze-button"
+              disabled={!file || loading}
+              onClick={analyzeFile}
+            >
+              {loading ? (
+                <RefreshCw className="spin" size={17} />
+              ) : (
+                <Activity size={17} />
+              )}
+              {loading ? "Analyzing traffic..." : "Analyze Network Traffic"}
+            </button>
+
+            {error && (
+              <div className="error-message">
+                <strong>Analysis failed</strong>
+                <p>{error}</p>
+              </div>
+            )}
+
+            {results && (
+              <div className="result-message">
+                <div className="result-success">
+                  <CheckCircle2 size={18} />
+                  <strong>Analysis completed</strong>
+                </div>
+                <p>File: {results.filename}</p>
+                <p>Total flows: {totalFlows.toLocaleString()}</p>
+                <p>Anomalies: {anomalyCount.toLocaleString()}</p>
+                <button
+                  className="download-button"
+                  onClick={() =>
+                    downloadCSV(results.results, results.columns ?? [])
+                  }
+                >
+                  <Download size={15} /> Download Results CSV
+                </button>
+              </div>
+            )}
+
+            <p className="upload-note">
+              Maximum 300,000 rows and 500 MB per request. Actual processing
+              capacity depends on available RAM.
+            </p>
+          </div>
+        </section>
+
+        {results && (
+          <section className="panel results-panel">
+            <div className="panel-heading results-heading">
+              <div>
+                <h3>Detection Results</h3>
+                <p>
+                  {filteredRows.length.toLocaleString()} matching rows from{" "}
+                  {totalFlows.toLocaleString()} analyzed flows
+                </p>
+              </div>
+              <Server size={19} />
+            </div>
+
+            <div className="table-controls">
+              <input
+                type="search"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search predictions..."
+                aria-label="Search detection results"
+              />
+              <select
+                value={filter}
+                onChange={(event) => setFilter(event.target.value)}
+                aria-label="Filter detection results"
+              >
+                <option value="all">All flows</option>
+                <option value="anomaly">Anomalies only</option>
+                <option value="attack">Non-benign predictions</option>
+              </select>
+            </div>
+
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    {resultColumns.map((column) => (
+                      <th key={column}>{column.replaceAll("_", " ")}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredRows.slice(0, 500).map((row, index) => (
+                    <tr key={index}>
+                      {resultColumns.map((column) => (
+                        <td key={column}>
+                          {column === "is_anomaly" ? (
+                            <span
+                              className={`table-status ${
+                                isTrue(row[column]) ? "danger" : "safe"
+                              }`}
+                            >
+                              {isTrue(row[column]) ? "Anomaly" : "Not flagged"}
+                            </span>
+                          ) : (
+                            formatValue(row[column])
+                          )}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {filteredRows.length > 500 && (
+              <p className="table-note">
+                Showing the first 500 matching rows. Download the CSV for all
+                results.
+              </p>
+            )}
+
+            {filteredRows.length === 0 && (
+              <div className="empty-state">
+                No rows match your current search or filter.
+              </div>
+            )}
+          </section>
+        )}
+
+        <footer>
+          SentinelAI · Hybrid Network Intrusion Detection System · Student
+          project
+        </footer>
+      </main>
+    </div>
+  );
+}
