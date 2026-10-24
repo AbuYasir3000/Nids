@@ -1,0 +1,32 @@
+SentinelAI Feature-Drift Analysis
+========================================
+
+Held-out file: Friday-WorkingHours-Afternoon-DDos.pcap_ISCX.csv
+Reference sampled rows: 468,017
+Held-out rows: 225,745
+Common features: 80
+
+Note: KS statistics measure distribution differences. They do not prove that a feature caused misclassification.
+
+Top 20 features by attack distribution difference:
+                    feature  attack_ks_statistic  attack_ks_pvalue  benign_ks_statistic  reference_missing_pct  test_missing_pct
+       min_seg_size_forward             0.839243               0.0             0.214144               0.000000          0.000000
+           act_data_pkt_fwd             0.771902               0.0             0.080565               0.000000          0.000000
+Total Length of Fwd Packets             0.651136               0.0             0.157769               0.000000          0.000000
+          Subflow Fwd Bytes             0.651136               0.0             0.157769               0.000000          0.000000
+          Subflow Bwd Bytes             0.626036               0.0             0.170673               0.000000          0.000000
+Total Length of Bwd Packets             0.626036               0.0             0.170673               0.000000          0.000000
+         Packet Length Mean             0.612954               0.0             0.162222               0.000000          0.000000
+              Flow Duration             0.611144               0.0             0.220337               0.000000          0.000000
+        Average Packet Size             0.609588               0.0             0.164069               0.000000          0.000000
+               Flow IAT Std             0.608543               0.0             0.225889               0.000000          0.000000
+               Flow IAT Max             0.606596               0.0             0.226387               0.000000          0.000000
+              Fwd Packets/s             0.604040               0.0             0.217144               0.000000          0.000000
+              Flow IAT Mean             0.603378               0.0             0.213905               0.000000          0.000000
+             Flow Packets/s             0.602912               0.0             0.221207               0.112175          0.015061
+     Fwd Packet Length Mean             0.597599               0.0             0.180225               0.000000          0.000000
+       Avg Fwd Segment Size             0.597599               0.0             0.180225               0.000000          0.000000
+                Fwd IAT Std             0.596726               0.0             0.083041               0.000000          0.000000
+          Fwd Header Length             0.595681               0.0             0.144484               0.000000          0.000000
+        Fwd Header Length.1             0.595681               0.0             0.144484               0.000000          0.000000
+          Total Fwd Packets             0.593756               0.0             0.083642               0.000000          0.000000

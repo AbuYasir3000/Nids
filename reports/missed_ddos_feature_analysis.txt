@@ -1,0 +1,29 @@
+Detected vs Missed DDoS Feature Analysis
+
+Detected attacks: 81,274
+Missed attacks: 46,753
+Sample size per group: 46,753
+
+KS statistics measure differences, not causation.
+
+                    feature  ks_statistic  p_value  detected_median  missed_median  detected_missing_pct  missed_missing_pct
+     Packet Length Variance      0.998567      0.0     5.574985e+06            0.0                   0.0                 0.0
+          Packet Length Std      0.998567      0.0     2.361141e+03            0.0                   0.0                 0.0
+      Bwd Packet Length Std      0.998503      0.0     3.173374e+03            0.0                   0.0                 0.0
+     Bwd Packet Length Mean      0.998246      0.0     2.321400e+03            0.0                   0.0                 0.0
+       Avg Bwd Segment Size      0.998246      0.0     2.321400e+03            0.0                   0.0                 0.0
+         Packet Length Mean      0.997733      0.0     1.163300e+03            6.0                   0.0                 0.0
+        Average Packet Size      0.997733      0.0     1.292556e+03            7.2                   0.0                 0.0
+Total Length of Bwd Packets      0.997604      0.0     1.160700e+04            0.0                   0.0                 0.0
+          Subflow Bwd Bytes      0.997604      0.0     1.160700e+04            0.0                   0.0                 0.0
+          Max Packet Length      0.997604      0.0     7.215000e+03            6.0                   0.0                 0.0
+      Bwd Packet Length Max      0.997604      0.0     7.215000e+03            0.0                   0.0                 0.0
+                Bwd IAT Std      0.997519      0.0     2.899794e+05            0.0                   0.0                 0.0
+     Total Backward Packets      0.997519      0.0     5.000000e+00            0.0                   0.0                 0.0
+        Subflow Bwd Packets      0.997519      0.0     5.000000e+00            0.0                   0.0                 0.0
+          Bwd Header Length      0.997519      0.0     1.120000e+02            0.0                   0.0                 0.0
+              Bwd IAT Total      0.997305      0.0     5.997700e+05            0.0                   0.0                 0.0
+                Bwd IAT Max      0.997219      0.0     5.914720e+05            0.0                   0.0                 0.0
+     Fwd Packet Length Mean      0.997155      0.0     8.666667e+00            6.0                   0.0                 0.0
+      Fwd Packet Length Max      0.997155      0.0     2.000000e+01            6.0                   0.0                 0.0
+      Fwd Packet Length Std      0.997155      0.0     1.026320e+01            0.0                   0.0                 0.0

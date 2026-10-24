@@ -1,0 +1,34 @@
+SentinelAI Held-Out DDoS Evaluation
+=============================================
+
+Held-out file: Friday-WorkingHours-Afternoon-DDos.pcap_ISCX.csv
+Task: Binary BENIGN vs ATTACK classification
+Training: All other available CIC-IDS2017 CSV files
+Training features: 80
+Test rows: 225,745
+
+Default threshold metrics:
+Accuracy: 0.792784
+Balanced accuracy: 0.817282
+Macro F1: 0.791682
+
+Classification report:
+              precision    recall  f1-score   support
+
+      BENIGN       0.68      1.00      0.81     97718
+      ATTACK       1.00      0.63      0.78    128027
+
+    accuracy                           0.79    225745
+   macro avg       0.84      0.82      0.79    225745
+weighted avg       0.86      0.79      0.79    225745
+
+Confusion matrix:
+[[97693    25]
+ [46753 81274]]
+
+Threshold analysis:
+Threshold=0.30, Attack recall=0.635585, Benign FPR=0.001689, Precision=0.997976, Macro F1=0.791527
+Threshold=0.40, Attack recall=0.635264, Benign FPR=0.000471, Precision=0.999435, Macro F1=0.791853
+Threshold=0.50, Attack recall=0.634819, Benign FPR=0.000256, Precision=0.999692, Macro F1=0.791682
+Threshold=0.60, Attack recall=0.632984, Benign FPR=0.000174, Precision=0.999790, Macro F1=0.790638
+Threshold=0.70, Attack recall=0.588259, Benign FPR=0.000133, Precision=0.999827, Macro F1=0.764110

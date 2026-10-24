@@ -1,0 +1,11 @@
+﻿fastapi
+joblib
+matplotlib
+numpy
+pandas
+plotly
+python-multipart
+scikit-learn
+seaborn
+streamlit
+uvicorn[standard]

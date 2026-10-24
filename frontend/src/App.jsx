@@ -29,9 +29,10 @@ import {
 import "./App.css";
 
 const API_URL = "http://127.0.0.1:8000";
-
 const PIE_COLORS = ["#4de0b2", "#ff7e8a"];
 const BAR_COLOR = "#4de0b2";
+const EMPTY_CLASS_COUNTS = Object.freeze({});
+const EMPTY_PREVIEW_ROWS = Object.freeze([]);
 
 function StatCard({ icon: Icon, title, value, subtitle, color }) {
   return (
@@ -49,42 +50,22 @@ function StatCard({ icon: Icon, title, value, subtitle, color }) {
 }
 
 function formatValue(value) {
-  if (value === null || value === undefined) return "—";
+  if (value === null || value === undefined) return "â€”";
   if (typeof value === "boolean") return value ? "Yes" : "No";
   if (typeof value === "number") {
-    return Number.isFinite(value) ? Number(value.toFixed(5)).toString() : "—";
+    return Number.isFinite(value)
+      ? Number(value.toFixed(5)).toString()
+      : "â€”";
   }
   return String(value);
 }
 
 function isTrue(value) {
-  return value === true || value === 1 || String(value).toLowerCase() === "true";
-}
-
-function downloadCSV(rows, columns) {
-  if (!rows?.length || !columns?.length) return;
-
-  const escapeCell = (value) =>
-    `"${formatValue(value).replaceAll('"', '""')}"`;
-
-  const csv = [
-    columns.map(escapeCell).join(","),
-    ...rows.map((row) =>
-      columns.map((column) => escapeCell(row[column])).join(",")
-    ),
-  ].join("\r\n");
-
-  const blob = new Blob(["\uFEFF", csv], {
-    type: "text/csv;charset=utf-8;",
-  });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = "sentinelai_detection_results.csv";
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
+  return (
+    value === true ||
+    value === 1 ||
+    String(value).toLowerCase() === "true"
+  );
 }
 
 export default function App() {
@@ -104,7 +85,9 @@ export default function App() {
       if (!response.ok) throw new Error("API unavailable");
 
       const data = await response.json();
-      setApiStatus(data.detector_ready ? "Online" : "Models unavailable");
+      setApiStatus(
+        data.detector_ready ? "Online" : "Models unavailable"
+      );
     } catch {
       setApiStatus("Offline");
     }
@@ -116,6 +99,8 @@ export default function App() {
     setLoading(true);
     setError("");
     setResults(null);
+    setSearch("");
+    setFilter("all");
 
     try {
       const formData = new FormData();
@@ -151,27 +136,28 @@ export default function App() {
     setFilter("all");
   }
 
-  // All statistics below are derived from the API response.
-  const classCounts = results?.class_counts ?? {};
+  const classCounts = results?.class_counts ?? EMPTY_CLASS_COUNTS;
 
   const sortedClasses = useMemo(
     () =>
       Object.entries(classCounts)
-        .map(([name, count]) => ({ name, count: Number(count) || 0 }))
+        .map(([name, count]) => ({
+          name,
+          count: Number(count) || 0,
+        }))
         .sort((a, b) => b.count - a.count),
     [classCounts]
   );
 
-  const benignCount = useMemo(() => {
-    const entry = sortedClasses.find(
+  const benignCount =
+    sortedClasses.find(
       (item) => item.name.trim().toLowerCase() === "benign"
-    );
-    return entry?.count ?? 0;
-  }, [sortedClasses]);
+    )?.count ?? 0;
 
   const predictedNonBenign = Math.max(
     0,
-    sortedClasses.reduce((sum, item) => sum + item.count, 0) - benignCount
+    sortedClasses.reduce((sum, item) => sum + item.count, 0) -
+      benignCount
   );
 
   const attackClasses = sortedClasses.filter(
@@ -180,48 +166,71 @@ export default function App() {
 
   const anomalyCount = Number(results?.anomaly_count ?? 0);
   const totalFlows = Number(results?.total_flows ?? 0);
-  const normalByIsolationForest = Math.max(0, totalFlows - anomalyCount);
+  const normalByIsolationForest = Math.max(
+    0,
+    totalFlows - anomalyCount
+  );
 
   const classChartData = sortedClasses.slice(0, 8).map((item) => ({
     name:
-      item.name.length > 19 ? `${item.name.slice(0, 17)}…` : item.name,
+      item.name.length > 19
+        ? `${item.name.slice(0, 17)}â€¦`
+        : item.name,
     fullName: item.name,
     flows: item.count,
   }));
 
   const anomalyChartData = results
     ? [
-        { name: "Not flagged", value: normalByIsolationForest },
-        { name: "Anomalies", value: anomalyCount },
+        {
+          name: "Not flagged",
+          value: normalByIsolationForest,
+        },
+        {
+          name: "Anomalies",
+          value: anomalyCount,
+        },
       ]
     : [];
 
-  const filteredRows = useMemo(() => {
-    if (!results?.results) return [];
+  // The API deliberately sends only a 500-row preview.
+  const previewRows = results?.results ?? EMPTY_PREVIEW_ROWS;
 
-    return results.results.filter((row) => {
+  const filteredRows = useMemo(() => {
+    return previewRows.filter((row) => {
       const predicted = String(
         row.predicted_class ?? row.hybrid_status ?? ""
-      ).trim().toLowerCase();
+      )
+        .trim()
+        .toLowerCase();
 
       const anomaly = isTrue(row.is_anomaly);
 
       const matchesFilter =
         filter === "all" ||
         (filter === "anomaly" && anomaly) ||
-        (filter === "attack" && predicted !== "benign" && predicted !== "");
+        (filter === "attack" &&
+          predicted !== "benign" &&
+          predicted !== "");
 
       const matchesSearch =
         !search ||
         Object.values(row).some((value) =>
-          String(value ?? "").toLowerCase().includes(search.toLowerCase())
+          String(value ?? "")
+            .toLowerCase()
+            .includes(search.toLowerCase())
         );
 
       return matchesFilter && matchesSearch;
     });
-  }, [results, filter, search]);
+  }, [previewRows, filter, search]);
 
   const resultColumns = results?.columns ?? [];
+
+  function downloadFullCSV() {
+    if (!results?.download_url) return;
+    window.location.href = `${API_URL}${results.download_url}`;
+  }
 
   return (
     <div className="app-shell">
@@ -231,7 +240,9 @@ export default function App() {
             <ShieldCheck size={25} />
           </div>
           <div>
-            <h2>Sentinel<span>AI</span></h2>
+            <h2>
+              Sentinel<span>AI</span>
+            </h2>
             <p>NETWORK DEFENSE</p>
           </div>
         </div>
@@ -258,11 +269,13 @@ export default function App() {
               }`}
             />
             <div>
-              <strong>{apiStatus === "Online" ? "Models Online" : apiStatus}</strong>
+              <strong>
+                {apiStatus === "Online" ? "Models Online" : apiStatus}
+              </strong>
               <small>Python detection service</small>
             </div>
           </div>
-          <p className="version">HYBRID NIDS · DEVELOPMENT</p>
+          <p className="version">HYBRID NIDS Â· DEVELOPMENT</p>
         </div>
       </aside>
 
@@ -283,7 +296,9 @@ export default function App() {
             <div className="welcome-tag">
               <Zap size={14} /> AI-POWERED SECURITY
             </div>
-            <h2>Network Intelligence, <span>Reimagined.</span></h2>
+            <h2>
+              Network Intelligence, <span>Reimagined.</span>
+            </h2>
             <p>
               Analyze network flows with your trained Random Forest and
               Isolation Forest models.
@@ -298,14 +313,16 @@ export default function App() {
           <StatCard
             icon={Activity}
             title="Analyzed Flows"
-            value={results ? totalFlows.toLocaleString() : "—"}
+            value={results ? totalFlows.toLocaleString() : "â€”"}
             subtitle={results ? results.filename : "Upload a CSV to begin"}
             color="#66e3bf"
           />
           <StatCard
             icon={AlertTriangle}
             title="Non-Benign Predictions"
-            value={results ? predictedNonBenign.toLocaleString() : "—"}
+            value={
+              results ? predictedNonBenign.toLocaleString() : "â€”"
+            }
             subtitle="Based on predicted classes"
             color="#ffb86b"
           />
@@ -319,7 +336,7 @@ export default function App() {
           <StatCard
             icon={CheckCircle2}
             title="Anomalies"
-            value={results ? anomalyCount.toLocaleString() : "—"}
+            value={results ? anomalyCount.toLocaleString() : "â€”"}
             subtitle={
               results && totalFlows
                 ? `${((anomalyCount / totalFlows) * 100).toFixed(2)}% flagged`
@@ -351,7 +368,12 @@ export default function App() {
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart
                       data={classChartData}
-                      margin={{ top: 8, right: 10, left: 0, bottom: 35 }}
+                      margin={{
+                        top: 8,
+                        right: 10,
+                        left: 0,
+                        bottom: 35,
+                      }}
                     >
                       <CartesianGrid
                         stroke="#233345"
@@ -404,7 +426,8 @@ export default function App() {
               </>
             ) : (
               <div className="empty-state">
-                Class distribution will appear here after a successful analysis.
+                Class distribution will appear here after a successful
+                analysis.
               </div>
             )}
           </div>
@@ -470,7 +493,8 @@ export default function App() {
                     <span key={item.name}>
                       <i
                         style={{
-                          background: PIE_COLORS[index % PIE_COLORS.length],
+                          background:
+                            PIE_COLORS[index % PIE_COLORS.length],
                         }}
                       />
                       {item.name}: {item.value.toLocaleString()}
@@ -480,7 +504,8 @@ export default function App() {
               </>
             ) : (
               <div className="empty-state">
-                Anomaly and non-anomaly counts will appear here after analysis.
+                Anomaly and non-anomaly counts will appear here after
+                analysis.
               </div>
             )}
           </div>
@@ -493,7 +518,7 @@ export default function App() {
                 <h3>Predicted Attack Categories</h3>
                 <p>
                   {results
-                    ? "Actual predictions returned by the detector"
+                    ? "Predictions returned by the detector"
                     : "Upload a dataset to show predictions"}
                 </p>
               </div>
@@ -584,13 +609,15 @@ export default function App() {
                 <p>File: {results.filename}</p>
                 <p>Total flows: {totalFlows.toLocaleString()}</p>
                 <p>Anomalies: {anomalyCount.toLocaleString()}</p>
+                <p>
+                  Table preview: {results.preview_rows ?? previewRows.length} rows
+                </p>
                 <button
                   className="download-button"
-                  onClick={() =>
-                    downloadCSV(results.results, results.columns ?? [])
-                  }
+                  onClick={downloadFullCSV}
+                  disabled={!results.download_url}
                 >
-                  <Download size={15} /> Download Results CSV
+                  <Download size={15} /> Download Full Results CSV
                 </button>
               </div>
             )}
@@ -608,8 +635,8 @@ export default function App() {
               <div>
                 <h3>Detection Results</h3>
                 <p>
-                  {filteredRows.length.toLocaleString()} matching rows from{" "}
-                  {totalFlows.toLocaleString()} analyzed flows
+                  {filteredRows.length.toLocaleString()} matching preview
+                  rows from {totalFlows.toLocaleString()} analyzed flows
                 </p>
               </div>
               <Server size={19} />
@@ -620,15 +647,15 @@ export default function App() {
                 type="search"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search predictions..."
-                aria-label="Search detection results"
+                placeholder="Search preview..."
+                aria-label="Search preview results"
               />
               <select
                 value={filter}
                 onChange={(event) => setFilter(event.target.value)}
                 aria-label="Filter detection results"
               >
-                <option value="all">All flows</option>
+                <option value="all">All preview flows</option>
                 <option value="anomaly">Anomalies only</option>
                 <option value="attack">Non-benign predictions</option>
               </select>
@@ -639,12 +666,14 @@ export default function App() {
                 <thead>
                   <tr>
                     {resultColumns.map((column) => (
-                      <th key={column}>{column.replaceAll("_", " ")}</th>
+                      <th key={column}>
+                        {column.replaceAll("_", " ")}
+                      </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredRows.slice(0, 500).map((row, index) => (
+                  {filteredRows.map((row, index) => (
                     <tr key={index}>
                       {resultColumns.map((column) => (
                         <td key={column}>
@@ -654,7 +683,9 @@ export default function App() {
                                 isTrue(row[column]) ? "danger" : "safe"
                               }`}
                             >
-                              {isTrue(row[column]) ? "Anomaly" : "Not flagged"}
+                              {isTrue(row[column])
+                                ? "Anomaly"
+                                : "Not flagged"}
                             </span>
                           ) : (
                             formatValue(row[column])
@@ -667,12 +698,11 @@ export default function App() {
               </table>
             </div>
 
-            {filteredRows.length > 500 && (
-              <p className="table-note">
-                Showing the first 500 matching rows. Download the CSV for all
-                results.
-              </p>
-            )}
+            <p className="table-note">
+              This table contains up to 500 preview rows. Search and filters
+              apply to the preview only. Download the full CSV for every
+              analyzed flow.
+            </p>
 
             {filteredRows.length === 0 && (
               <div className="empty-state">
@@ -683,7 +713,7 @@ export default function App() {
         )}
 
         <footer>
-          SentinelAI · Hybrid Network Intrusion Detection System · Student
+          SentinelAI Â· Hybrid Network Intrusion Detection System Â· Student
           project
         </footer>
       </main>

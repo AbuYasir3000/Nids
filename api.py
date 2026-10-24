@@ -1,11 +1,14 @@
 
-from io import BytesIO
+import os
+import tempfile
 from pathlib import Path
+from uuid import uuid4
 
 import numpy as np
 import pandas as pd
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from sklearn.metrics import (
     accuracy_score,
     balanced_accuracy_score,
@@ -19,15 +22,17 @@ from sklearn.metrics import (
 from src.hybrid_detector import HybridNIDS
 
 
-BASE_DIR = Path(__file__).resolve().parent
-
 MAX_FILE_SIZE = 500 * 1024 * 1024
 MAX_ROWS = 300_000
+PREVIEW_ROWS = 500
+
+RESULTS_DIR = Path(tempfile.gettempdir()) / "sentinelai_nids_results"
+RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
 app = FastAPI(
     title="SentinelAI NIDS API",
     description="Hybrid AI Network Intrusion Detection System",
-    version="1.1.0",
+    version="1.2.0",
 )
 
 app.add_middleware(
@@ -60,6 +65,7 @@ def home():
         "detector_ready": detector is not None,
         "max_file_size_mb": MAX_FILE_SIZE // (1024 * 1024),
         "max_rows_per_analysis": MAX_ROWS,
+        "preview_rows": PREVIEW_ROWS,
         "detector_error": detector_error,
     }
 
@@ -87,16 +93,34 @@ async def analyze_csv(file: UploadFile = File(...)):
             detail=f"Detection models unavailable: {detector_error}",
         )
 
+    input_path = None
+
     try:
-        contents = await file.read(MAX_FILE_SIZE + 1)
+        # Stream the upload to disk and enforce the file-size limit.
+        with tempfile.NamedTemporaryFile(
+            mode="wb",
+            suffix=".csv",
+            delete=False,
+        ) as temp:
+            input_path = Path(temp.name)
+            total_bytes = 0
 
-        if len(contents) > MAX_FILE_SIZE:
-            raise HTTPException(
-                status_code=413,
-                detail="File is too large. Maximum size is 500 MB.",
-            )
+            while True:
+                chunk = await file.read(1024 * 1024)
+                if not chunk:
+                    break
 
-        if not contents:
+                total_bytes += len(chunk)
+
+                if total_bytes > MAX_FILE_SIZE:
+                    raise HTTPException(
+                        status_code=413,
+                        detail="File is too large. Maximum size is 500 MB.",
+                    )
+
+                temp.write(chunk)
+
+        if total_bytes == 0:
             raise HTTPException(
                 status_code=400,
                 detail="The uploaded CSV is empty.",
@@ -104,7 +128,7 @@ async def analyze_csv(file: UploadFile = File(...)):
 
         try:
             df = pd.read_csv(
-                BytesIO(contents),
+                input_path,
                 encoding_errors="replace",
                 low_memory=False,
             )
@@ -129,10 +153,13 @@ async def analyze_csv(file: UploadFile = File(...)):
                 ),
             )
 
-        # Save labels separately. They are never passed to the detector.
+        # Preserve labels separately; never pass them as prediction targets
+        # or features to the detector.
         label_column = next(
-            (column for column in df.columns
-             if str(column).strip().lower() == "label"),
+            (
+                col for col in df.columns
+                if str(col).strip().lower() == "label"
+            ),
             None,
         )
 
@@ -146,8 +173,8 @@ async def analyze_csv(file: UploadFile = File(...)):
                 .reset_index(drop=True)
             )
 
-        # Inference happens before any comparison with actual labels.
-        predictions = detector.predict(df)
+        model_features = df.drop(columns=[label_column], errors="ignore")
+        predictions = detector.predict(model_features)
 
         if not isinstance(predictions, pd.DataFrame):
             predictions = pd.DataFrame(predictions)
@@ -166,11 +193,11 @@ async def analyze_csv(file: UploadFile = File(...)):
 
         predicted_labels = (
             results_df["predicted_class"]
-            .astype(str)
+            .astype("string")
             .str.strip()
         )
 
-        # Evaluation is optional and only available when labels exist.
+        # Optional evaluation against labels in the uploaded CSV.
         evaluation = None
 
         if actual_labels is not None:
@@ -181,42 +208,48 @@ async def analyze_csv(file: UploadFile = File(...)):
             )
 
             y_true = actual_labels[valid].astype(str)
-            y_pred = predicted_labels[valid]
+            y_pred = predicted_labels[valid].astype(str)
 
             if len(y_true) > 0:
-                # Include all actual and predicted classes in the matrix.
                 classes = sorted(set(y_true) | set(y_pred))
 
                 evaluation = {
                     "evaluated_rows": int(len(y_true)),
-                    "accuracy": float(accuracy_score(y_true, y_pred)),
+                    "accuracy": float(
+                        accuracy_score(y_true, y_pred)
+                    ),
                     "balanced_accuracy": float(
                         balanced_accuracy_score(y_true, y_pred)
                     ),
                     "precision_macro": float(
                         precision_score(
-                            y_true, y_pred,
+                            y_true,
+                            y_pred,
                             average="macro",
                             zero_division=0,
                         )
                     ),
                     "recall_macro": float(
                         recall_score(
-                            y_true, y_pred,
+                            y_true,
+                            y_pred,
                             average="macro",
                             zero_division=0,
                         )
                     ),
                     "f1_macro": float(
                         f1_score(
-                            y_true, y_pred,
+                            y_true,
+                            y_pred,
                             average="macro",
                             zero_division=0,
                         )
                     ),
                     "classes": classes,
                     "confusion_matrix": confusion_matrix(
-                        y_true, y_pred, labels=classes
+                        y_true,
+                        y_pred,
+                        labels=classes,
                     ).tolist(),
                     "classification_report": classification_report(
                         y_true,
@@ -226,22 +259,19 @@ async def analyze_csv(file: UploadFile = File(...)):
                         zero_division=0,
                     ),
                     "note": (
-                        "These metrics compare predicted classes with the "
-                        "CSV labels. They are only an independent performance "
-                        "estimate if this file was not used to train or tune "
-                        "the model."
+                        "Metrics compare predictions with CSV labels. "
+                        "They estimate independent performance only if "
+                        "this data was not used to train or tune the model."
                     ),
                 }
 
-        # Include the true label in exported results only after inference.
         if actual_labels is not None:
             results_df["actual_class_for_evaluation"] = actual_labels
 
-        class_counts = (
-            predicted_labels
-            .value_counts()
-            .to_dict()
-        )
+        class_counts = {
+            str(name): int(count)
+            for name, count in predicted_labels.value_counts().items()
+        }
 
         anomaly_count = 0
 
@@ -253,21 +283,33 @@ async def analyze_csv(file: UploadFile = File(...)):
                 .sum()
             )
 
-        # Convert NaN and infinite values to JSON-safe nulls.
-        results_df = results_df.replace([np.inf, -np.inf], np.nan)
-        results_df = results_df.astype(object)
-        results_df = results_df.where(pd.notna(results_df), None)
+        # Store complete results on disk. Return only a small preview in JSON.
+        analysis_id = str(uuid4())
+        results_path = RESULTS_DIR / f"{analysis_id}.csv"
+
+        results_df.to_csv(
+            results_path,
+            index=False,
+            na_rep="",
+        )
+
+        preview_df = results_df.head(PREVIEW_ROWS).replace(
+            [np.inf, -np.inf],
+            np.nan,
+        )
+        preview_df = preview_df.astype(object)
+        preview_df = preview_df.where(pd.notna(preview_df), None)
 
         return {
-            "filename": file.filename,
+            "analysis_id": analysis_id,
+            "filename": Path(file.filename).name,
             "total_flows": int(len(df)),
             "anomaly_count": anomaly_count,
-            "class_counts": {
-                str(name): int(count)
-                for name, count in class_counts.items()
-            },
+            "class_counts": class_counts,
             "columns": list(results_df.columns),
-            "results": results_df.to_dict(orient="records"),
+            "results": preview_df.to_dict(orient="records"),
+            "preview_rows": min(PREVIEW_ROWS, len(results_df)),
+            "download_url": f"/download/{analysis_id}",
             "evaluation": evaluation,
         }
 
@@ -280,4 +322,32 @@ async def analyze_csv(file: UploadFile = File(...)):
             detail=f"Analysis failed: {type(exc).__name__}: {exc}",
         ) from exc
     finally:
+        if input_path is not None:
+            input_path.unlink(missing_ok=True)
+
         await file.close()
+
+
+@app.get("/download/{analysis_id}")
+def download_results(analysis_id: str):
+    try:
+        safe_id = str(uuid4()) if False else str(__import__("uuid").UUID(analysis_id))
+    except (ValueError, AttributeError):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid analysis ID.",
+        )
+
+    results_path = RESULTS_DIR / f"{safe_id}.csv"
+
+    if not results_path.is_file():
+        raise HTTPException(
+            status_code=404,
+            detail="Results file not found. Please analyze the CSV again.",
+        )
+
+    return FileResponse(
+        path=results_path,
+        media_type="text/csv",
+        filename="sentinelai_detection_results.csv",
+    )
