@@ -1,0 +1,22 @@
+Behavioral possible-port-scan rule calibration and development checks
+====================================================================
+
+Rule:
+  unique destination ports per source-minute > 54
+  AND source flows per minute > 2,085
+
+Calibration:
+  Port-diversity threshold = q99.9 of 176,985 benign source-minute groups.
+  Calibration used the six CIC-IDS2017 captures excluding Friday DDoS
+  (binary-model calibration capture) and Friday PortScan (evaluation capture).
+  The source-flow threshold is the existing 2,085 benign-calibrated threshold.
+  Thresholds are not fitted to scan_A.pcap.
+
+Development checks at the frozen thresholds:
+  Friday DDoS capture: benign false-positive rate 0.0000%; attack recall 0.0000%.
+  Friday PortScan capture: benign false-positive rate 0.0010%; attack recall 97.8777%.
+
+These are flow-level, CIC development-capture measurements. The rule requires
+both independent behavior signals; it is a possible-port-scan indicator, not
+a confirmed attack-family classification. These CIC captures have informed
+project development, so independent validation is still required.

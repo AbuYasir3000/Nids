@@ -86,7 +86,11 @@ export default function App() {
 
       const data = await response.json();
       setApiStatus(
-        data.detector_ready ? "Online" : "Models unavailable"
+        !data.detector_ready
+          ? "Models unavailable"
+          : data.generalized_model_ready
+            ? "Online"
+            : "Generalization model missing"
       );
     } catch {
       setApiStatus("Offline");
@@ -165,6 +169,19 @@ export default function App() {
   );
 
   const anomalyCount = Number(results?.anomaly_count ?? 0);
+  const generalizedAttackCount = Number(
+    results?.generalized_attack_count ?? 0
+  );
+  const modelGeneralizedAttackCount = Number(
+    results?.model_generalized_attack_count ?? 0
+  );
+  const behavioralFindings = results?.behavioral_findings;
+  const evaluation = results?.evaluation;
+  const labeledClasses = Object.entries(
+    evaluation?.classification_report ?? {}
+  )
+    .filter(([, metrics]) => Number(metrics?.support) > 0)
+    .sort((left, right) => Number(right[1].support) - Number(left[1].support));
   const totalFlows = Number(results?.total_flows ?? 0);
   const normalByIsolationForest = Math.max(
     0,
@@ -209,9 +226,13 @@ export default function App() {
       const matchesFilter =
         filter === "all" ||
         (filter === "anomaly" && anomaly) ||
+        (filter === "behavioral" && (
+          isTrue(row.is_source_burst_alert) ||
+          isTrue(row.is_high_rate_multiport_activity)
+        )) ||
         (filter === "attack" &&
-          predicted !== "benign" &&
-          predicted !== "");
+          ((predicted !== "benign" && predicted !== "") ||
+            isTrue(row.is_model_generalized_attack)));
 
       const matchesSearch =
         !search ||
@@ -328,9 +349,15 @@ export default function App() {
           />
           <StatCard
             icon={ShieldCheck}
-            title="Detection Models"
-            value="02"
-            subtitle="Random Forest + Isolation Forest"
+            title="Learned Binary Attack Flags"
+            value={
+              results ? generalizedAttackCount.toLocaleString() : "—"
+            }
+            subtitle={
+              results
+                ? "Calibrated classifier only; behavior rules are separate"
+                : "Learned model predictions only"
+            }
             color="#a99bff"
           />
           <StatCard
@@ -346,6 +373,93 @@ export default function App() {
           />
         </section>
 
+        {evaluation && (
+          <section className="panel evaluation-panel">
+            <div className="panel-heading">
+              <div>
+                <h3>Ground-Truth Label Evaluation</h3>
+                <p>
+                  Actual class counts and strict label comparison. Unsupported
+                  classes are counted as unmatched, not remapped.
+                </p>
+              </div>
+              <span className="panel-chip">LABELED INPUT</span>
+            </div>
+            <div className="evaluation-metrics">
+              <span>
+                Exact-label agreement: {(Number(evaluation.accuracy) * 100).toFixed(2)}%
+              </span>
+              <span>
+                Balanced accuracy: {(
+                  Number(evaluation.balanced_accuracy) * 100
+                ).toFixed(2)}%
+              </span>
+              <span>
+                Macro F1: {(Number(evaluation.f1_macro) * 100).toFixed(2)}%
+              </span>
+              <span>
+                Evaluated rows: {Number(
+                  evaluation.evaluated_rows ?? 0
+                ).toLocaleString()}
+              </span>
+            </div>
+            <div className="evaluation-table-wrap">
+              <table className="evaluation-table">
+                <thead>
+                  <tr>
+                    <th>Actual class</th>
+                    <th>Rows</th>
+                    <th>Precision</th>
+                    <th>Recall</th>
+                    <th>F1</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {labeledClasses.map(([name, metrics]) => (
+                    <tr key={name}>
+                      <td>{name}</td>
+                      <td>{Number(metrics.support).toLocaleString()}</td>
+                      <td>{(Number(metrics.precision) * 100).toFixed(2)}%</td>
+                      <td>{(Number(metrics.recall) * 100).toFixed(2)}%</td>
+                      <td>{(Number(metrics["f1-score"]) * 100).toFixed(2)}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="table-note">
+              {evaluation.note} CSV labels are used only for this evaluation
+              and are never passed to the detector as model inputs. Unsupported
+              actual labels: {Object.entries(
+                evaluation.unsupported_actual_label_counts ?? {}
+              ).map(([name, count]) => `${name} (${Number(count).toLocaleString()})`).join(", ") || "none"}.
+            </p>
+          </section>
+        )}
+
+        {results && behavioralFindings && (
+          <section className="panel behavioral-summary">
+            <div className="panel-heading">
+              <div>
+                <h3>Behavioral Heuristic (separate from model predictions)</h3>
+                <p>Source-rate and port-diversity rules can flag benign high-volume traffic.</p>
+              </div>
+              <ShieldCheck size={19} />
+            </div>
+            <h2>{behavioralFindings.classification}</h2>
+            <p>
+              {Number(behavioralFindings.source_burst_event_count ?? 0).toLocaleString()} source-minute source-burst events cover {Number(behavioralFindings.source_burst_flow_count ?? 0).toLocaleString()} flows. {Number(behavioralFindings.high_rate_multiport_event_count ?? 0).toLocaleString()} also exceeded the port-diversity threshold, covering {Number(behavioralFindings.high_rate_multiport_flow_count ?? 0).toLocaleString()} flows.
+              {` Random Forest non-benign predictions: ${predictedNonBenign.toLocaleString()}; learned binary-model flags: ${modelGeneralizedAttackCount.toLocaleString()}. Heuristic matches are not model predictions.`}
+            </p>
+            {behavioralFindings.events?.map((event) => (
+              <p key={event.event_id}>
+                {event.classification}: {event.source_ip}, {event.window_start} to {event.last_observed_at}; {Number(event.flow_count).toLocaleString()} associated flows, {Number(event.unique_destination_ports).toLocaleString()} destination ports across {Number(event.unique_destination_ips).toLocaleString()} destination IPs. Top destination: {event.top_destination_ips?.[0]?.destination_ip ?? "unavailable"}. Reason: {event.reasons?.join("; ")}.
+              </p>
+            ))}
+            <p className="table-note">{behavioralFindings.note}</p>
+          </section>
+        )}
+
         <section className="charts-grid" id="traffic">
           <div className="panel traffic-panel">
             <div className="panel-heading">
@@ -353,7 +467,7 @@ export default function App() {
                 <h3>Predicted Class Distribution</h3>
                 <p>
                   {results
-                    ? "Actual Random Forest prediction counts"
+                    ? "Model predictions; supplied CSV labels are shown separately"
                     : "Upload a CSV to populate this chart"}
                 </p>
               </div>
@@ -551,7 +665,7 @@ export default function App() {
               )
             ) : (
               <div className="empty-state">
-                No analysis yet. Upload a compatible network-flow CSV.
+                No analysis yet. Upload a compatible flow CSV or a PCAP capture.
               </div>
             )}
           </div>
@@ -567,15 +681,15 @@ export default function App() {
 
             <label className="drop-zone">
               <Upload size={27} />
-              <strong>{file ? file.name : "Choose a CSV file"}</strong>
+              <strong>{file ? file.name : "Choose a CSV or PCAP file"}</strong>
               <span>
                 {file
                   ? `${(file.size / 1024 / 1024).toFixed(2)} MB`
-                  : "CIC-IDS2017 or compatible CSV"}
+                  : "CSV, PCAP, or PCAPNG traffic capture"}
               </span>
               <input
                 type="file"
-                accept=".csv,text/csv"
+                accept=".csv,.pcap,.pcapng,.pcap10,text/csv,application/vnd.tcpdump.pcap"
                 onChange={handleFile}
               />
             </label>
@@ -623,8 +737,8 @@ export default function App() {
             )}
 
             <p className="upload-note">
-              Maximum 300,000 rows and 500 MB per request. Actual processing
-              capacity depends on available RAM.
+              Maximum 20 GiB per upload with no fixed flow-count limit. PCAP
+              conversion requires CICFlowMeter on the API server.
             </p>
           </div>
         </section>
@@ -657,6 +771,7 @@ export default function App() {
               >
                 <option value="all">All preview flows</option>
                 <option value="anomaly">Anomalies only</option>
+                <option value="behavioral">Behavioral alerts</option>
                 <option value="attack">Non-benign predictions</option>
               </select>
             </div>

@@ -326,6 +326,67 @@ h1 {
   min-width: 0;
 }
 
+.behavioral-summary {
+  margin: 0 0 16px;
+  border-color: #655032;
+  background: linear-gradient(115deg, #211c14, #0d1927 70%);
+}
+
+.evaluation-panel {
+  margin: 0 0 16px;
+}
+
+.evaluation-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0 12px;
+}
+
+.evaluation-metrics span {
+  padding: 8px 10px;
+  border: 1px solid #263b50;
+  border-radius: 7px;
+  color: #dce7f2;
+  font-size: 11px;
+}
+
+.evaluation-table-wrap {
+  overflow-x: auto;
+}
+
+.evaluation-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  text-align: left;
+}
+
+.evaluation-table th,
+.evaluation-table td {
+  padding: 9px 10px;
+  border-bottom: 1px solid #1d3043;
+  white-space: nowrap;
+}
+
+.evaluation-table th {
+  color: #8ea3b9;
+  font-weight: 600;
+}
+
+.behavioral-summary h2 {
+  color: #ffcb82;
+  font-size: 18px;
+  margin: 15px 0 7px;
+}
+
+.behavioral-summary > p {
+  color: #aab8c8;
+  font-size: 11px;
+  line-height: 1.7;
+  margin: 6px 0;
+}
+
 .panel-heading {
   display: flex;
   justify-content: space-between;

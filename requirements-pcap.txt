@@ -1,0 +1,3 @@
+# Optional PCAP/PCAPNG-to-flow conversion support.
+# CICFlowMeter currently requires Python 3.12 or newer.
+cicflowmeter==0.5.0
