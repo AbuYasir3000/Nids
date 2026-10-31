@@ -29,19 +29,27 @@ import {
 import "./App.css";
 
 const API_URL = "http://127.0.0.1:8000";
-const PIE_COLORS = ["#4de0b2", "#ff7e8a"];
-const BAR_COLOR = "#4de0b2";
+const PIE_COLORS = ["#2f3a44", "#f2b134"];
+const BAR_BENIGN = "#4a8f78";
+const BAR_ATTACK = "#ff6b5e";
+const TOOLTIP_STYLE = {
+  background: "#181d22",
+  border: "1px solid #333d47",
+  borderRadius: 8,
+  color: "#e8ecef",
+  fontSize: 12,
+};
 const EMPTY_CLASS_COUNTS = Object.freeze({});
 const EMPTY_PREVIEW_ROWS = Object.freeze([]);
 
-function StatCard({ icon: Icon, title, value, subtitle, color }) {
+function StatCard({ icon: Icon, title, value, subtitle, tone = "neutral" }) {
   return (
-    <div className="stat-card">
+    <div className="stat-card" data-tone={tone}>
       <div className="stat-top">
-        <span>{title}</span>
-        <span className="stat-icon" style={{ color }}>
-          <Icon size={20} />
+        <span className="stat-icon">
+          <Icon size={15} />
         </span>
+        <span>{title}</span>
       </div>
       <div className="stat-value">{value}</div>
       <div className="stat-subtitle">{subtitle}</div>
@@ -261,6 +269,34 @@ export default function App() {
     window.location.href = `${API_URL}${results.download_url}`;
   }
 
+  const modelsFlagged = predictedNonBenign > 0 || generalizedAttackCount > 0;
+  const behavioralSubject = topBehavioralEvent
+    ? ` (top source ${topBehavioralEvent.source_ip})`
+    : targetFloodEvent
+      ? ` (aimed at ${targetFloodEvent.destination_ip})`
+      : "";
+  let verdictTone = "ok";
+  let verdictTitle = "No threats detected";
+  let verdictText = `Models and behavioral rules found nothing suspicious in ${totalFlows.toLocaleString()} flows.`;
+  if (modelsFlagged) {
+    verdictTone = "danger";
+    verdictTitle = "Attack traffic predicted";
+    verdictText =
+      `Random Forest classed ${predictedNonBenign.toLocaleString()} flows as non-benign` +
+      (attackClasses[0] ? ` (mostly ${attackClasses[0].name})` : "") +
+      `; the learned binary model flagged ${generalizedAttackCount.toLocaleString()}.` +
+      (behavioralFlowCount > 0
+        ? ` ${behavioralFlowCount.toLocaleString()} flows also matched behavioral rules${behavioralSubject}.`
+        : "");
+  } else if (behavioralFlowCount > 0) {
+    verdictTone = "warn";
+    verdictTitle = "Possible scan or high-rate activity detected by behavioral rules";
+    verdictText =
+      `The trained models flagged no attacks, but ${behavioralFlowCount.toLocaleString()} flows${behavioralSubject} ` +
+      "matched the port-diversity / source-rate / unanswered-flood rules. The models may not " +
+      "recognise this traffic pattern; review the Behavioral Heuristic panel below.";
+  }
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -304,7 +340,7 @@ export default function App() {
               <small>Python detection service</small>
             </div>
           </div>
-          <p className="version">HYBRID NIDS Â· DEVELOPMENT</p>
+          <p className="version">HYBRID NIDS · DEVELOPMENT</p>
         </div>
       </aside>
 
@@ -320,37 +356,41 @@ export default function App() {
           </button>
         </header>
 
-        <section className="welcome-panel">
-          <div>
-            <div className="welcome-tag">
-              <Zap size={14} /> AI-POWERED SECURITY
-            </div>
-            <h2>
-              Network Intelligence, <span>Reimagined.</span>
-            </h2>
-            <p>
-              Analyze network flows with your trained Random Forest and
-              Isolation Forest models.
-            </p>
-          </div>
-          <div className="welcome-art">
-            <ShieldCheck size={92} strokeWidth={1} />
-          </div>
-        </section>
-
-        {results && behavioralFlowCount > 0 && predictedNonBenign === 0 && generalizedAttackCount === 0 && (
-          <section className="panel alert-banner" role="alert">
-            <AlertTriangle size={20} />
+        {!results && (
+          <section className="welcome-panel">
             <div>
-              <strong>Possible scan or high-rate activity detected by behavioral rules.</strong>{" "}
-              The trained models flagged no attacks, but {behavioralFlowCount.toLocaleString()} flows
-              {topBehavioralEvent
-                ? ` (top source ${topBehavioralEvent.source_ip})`
-                : targetFloodEvent
-                  ? ` (aimed at ${targetFloodEvent.destination_ip})`
-                  : ""} matched the
-              port-diversity / source-rate / unanswered-flood rules. The models may not recognise this traffic
-              pattern; review the Behavioral Heuristic panel below.
+              <div className="welcome-tag">
+                <Zap size={13} /> HYBRID DETECTION
+              </div>
+              <h2>
+                Network flow analysis, <span>models plus rules.</span>
+              </h2>
+              <p>
+                Upload a CIC flow CSV or a PCAP capture. Random Forest,
+                Isolation Forest and behavioral rules each report separately,
+                so you can see where they agree and where they do not.
+              </p>
+            </div>
+            <a className="welcome-cta" href="#analyze">
+              <Upload size={16} /> Upload capture
+            </a>
+          </section>
+        )}
+
+        {results && (
+          <section
+            className="verdict"
+            data-tone={verdictTone}
+            role={verdictTone === "ok" ? "status" : "alert"}
+          >
+            {verdictTone === "ok" ? (
+              <CheckCircle2 size={20} />
+            ) : (
+              <AlertTriangle size={20} />
+            )}
+            <div>
+              <strong>{verdictTitle}</strong>
+              <p>{verdictText}</p>
             </div>
           </section>
         )}
@@ -361,7 +401,6 @@ export default function App() {
             title="Analyzed Flows"
             value={results ? totalFlows.toLocaleString() : "—"}
             subtitle={results ? results.filename : "Upload a CSV to begin"}
-            color="#66e3bf"
           />
           <StatCard
             icon={AlertTriangle}
@@ -370,7 +409,7 @@ export default function App() {
               results ? predictedNonBenign.toLocaleString() : "—"
             }
             subtitle="Based on predicted classes"
-            color="#ffb86b"
+            tone={results && predictedNonBenign > 0 ? "danger" : "neutral"}
           />
           <StatCard
             icon={ShieldCheck}
@@ -383,7 +422,7 @@ export default function App() {
                 ? "Calibrated classifier only; behavior rules are separate"
                 : "Learned model predictions only"
             }
-            color="#a99bff"
+            tone={results && generalizedAttackCount > 0 ? "danger" : "neutral"}
           />
           <StatCard
             icon={AlertTriangle}
@@ -398,7 +437,7 @@ export default function App() {
                     : "No source-rate, port-scan or flood rule matched"
                 : "Rule-based signals"
             }
-            color="#ff7a7a"
+            tone={results && behavioralFlowCount > 0 ? "warn" : "neutral"}
           />
           <StatCard
             icon={CheckCircle2}
@@ -409,7 +448,6 @@ export default function App() {
                 ? `${((anomalyCount / totalFlows) * 100).toFixed(2)}% flagged`
                 : "Awaiting analysis"
             }
-            color="#65b9ff"
           />
         </section>
 
@@ -492,12 +530,12 @@ export default function App() {
               {` Random Forest non-benign predictions: ${predictedNonBenign.toLocaleString()}; learned binary-model flags: ${modelGeneralizedAttackCount.toLocaleString()}. Heuristic matches are not model predictions.`}
             </p>
             {behavioralFindings.events?.map((event) => (
-              <p key={event.event_id}>
+              <p className="event-line" key={event.event_id}>
                 {event.classification}: {event.source_ip}, {event.window_start} to {event.last_observed_at}; {Number(event.flow_count).toLocaleString()} associated flows, {Number(event.unique_destination_ports).toLocaleString()} destination ports across {Number(event.unique_destination_ips).toLocaleString()} destination IPs. Top destination: {event.top_destination_ips?.[0]?.destination_ip ?? "unavailable"}. Reason: {event.reasons?.join("; ")}.
               </p>
             ))}
             {behavioralFindings.target_flood_events?.map((event) => (
-              <p key={`${event.destination_ip}|${event.window_start}`}>
+              <p className="event-line" key={`${event.destination_ip}|${event.window_start}`}>
                 {event.classification}: target {event.destination_ip}, minute starting {event.window_start}; {Number(event.flows).toLocaleString()} flows, {(Number(event.unanswered_share) * 100).toFixed(1)}% unanswered{event.unique_sources != null ? `, ${Number(event.unique_sources).toLocaleString()} distinct sources` : ""}. Threshold: more than {Number(event.flow_threshold).toLocaleString()} flows per minute (uncalibrated development rule).
               </p>
             ))}
@@ -535,33 +573,29 @@ export default function App() {
                       }}
                     >
                       <CartesianGrid
-                        stroke="#233345"
+                        stroke="#242b32"
                         strokeDasharray="4 4"
                         vertical={false}
                       />
                       <XAxis
                         dataKey="name"
-                        stroke="#71839a"
+                        stroke="#8c98a4"
                         tickLine={false}
                         axisLine={false}
                         interval={0}
                         angle={-25}
                         textAnchor="end"
                         height={60}
-                        tick={{ fontSize: 10 }}
+                        tick={{ fontSize: 11 }}
                       />
                       <YAxis
-                        stroke="#71839a"
+                        stroke="#8c98a4"
                         tickLine={false}
                         axisLine={false}
-                        tick={{ fontSize: 10 }}
+                        tick={{ fontSize: 11 }}
                       />
                       <Tooltip
-                        contentStyle={{
-                          background: "#101c2a",
-                          border: "1px solid #2a3b50",
-                          borderRadius: 8,
-                        }}
+                        contentStyle={TOOLTIP_STYLE}
                         formatter={(value) => [
                           Number(value).toLocaleString(),
                           "Predicted flows",
@@ -573,9 +607,19 @@ export default function App() {
                       <Bar
                         dataKey="flows"
                         name="Predicted flows"
-                        fill={BAR_COLOR}
-                        radius={[5, 5, 0, 0]}
-                      />
+                        radius={[4, 4, 0, 0]}
+                      >
+                        {classChartData.map((entry) => (
+                          <Cell
+                            key={entry.fullName}
+                            fill={
+                              entry.fullName.trim().toLowerCase() === "benign"
+                                ? BAR_BENIGN
+                                : BAR_ATTACK
+                            }
+                          />
+                        ))}
+                      </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -612,8 +656,8 @@ export default function App() {
                         data={anomalyChartData}
                         dataKey="value"
                         nameKey="name"
-                        innerRadius={62}
-                        outerRadius={88}
+                        innerRadius={64}
+                        outerRadius={90}
                         paddingAngle={4}
                         stroke="none"
                       >
@@ -625,11 +669,7 @@ export default function App() {
                         ))}
                       </Pie>
                       <Tooltip
-                        contentStyle={{
-                          background: "#101c2a",
-                          border: "1px solid #2a3b50",
-                          borderRadius: 8,
-                        }}
+                        contentStyle={TOOLTIP_STYLE}
                         formatter={(value) => [
                           Number(value).toLocaleString(),
                           "Flows",
@@ -873,7 +913,7 @@ export default function App() {
         )}
 
         <footer>
-          SentinelAI Â· Hybrid Network Intrusion Detection System Â· Student
+          SentinelAI · Hybrid Network Intrusion Detection System · Student
           project
         </footer>
       </main>
