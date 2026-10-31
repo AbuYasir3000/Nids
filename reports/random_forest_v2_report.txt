@@ -1,0 +1,22 @@
+Random Forest v2 (CIC-IDS2017 sample + labelled capture)
+Train rows: 118,674 (CIC 100,258, capture 18,416)
+Held-out capture hosts: ['10.0.0.12', '10.0.0.15', '10.0.0.18', '10.0.0.21', '10.0.0.6']
+Capture labels are ASSUMED: source == 192.168.2.5 -> PortScan, else BENIGN.
+
+[CIC sample (20% stratified holdout)] v2: accuracy 0.9946; attack recall (any non-benign) 0.9982; benign false-positive 0.0020
+[CIC sample (20% stratified holdout)] current (old): accuracy 0.9821; attack recall (any non-benign) 0.9998; benign false-positive 0.0005
+
+[Capture, held-out hosts] v2: accuracy 1.0000; attack recall (any non-benign) 1.0000; benign false-positive 0.0000
+[Capture, held-out hosts] current (old): accuracy 0.1913; attack recall (any non-benign) 0.0000; benign false-positive 0.0000
+
+v2 on held-out capture hosts:
+              precision    recall  f1-score   support
+
+      BENIGN       1.00      1.00      1.00      1422
+    PortScan       1.00      1.00      1.00      6010
+
+    accuracy                           1.00      7432
+   macro avg       1.00      1.00      1.00      7432
+weighted avg       1.00      1.00      1.00      7432
+
+NOTE: capture flows come from one scanner/tool and one network, so the host split is only a partial test of generalization.

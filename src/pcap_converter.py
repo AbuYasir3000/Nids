@@ -226,6 +226,13 @@ def convert_pcap_to_csv(input_path, output_path):
             "and restart the API."
         ) from exc
 
+    try:
+        from . import cic_compat
+    except ImportError:
+        import cic_compat
+    # Report payload-byte lengths and TCP header lengths like CIC-IDS2017.
+    cic_compat.apply()
+
     input_path = Path(input_path).resolve()
     output_path = Path(output_path).resolve()
     capture_path = input_path

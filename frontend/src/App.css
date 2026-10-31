@@ -264,7 +264,7 @@ h1 {
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 15px;
   margin: 20px 0;
 }
@@ -301,11 +301,11 @@ h1 {
 }
 
 .stat-value {
-  font-size: clamp(23px, 2vw, 30px);
+  font-size: clamp(20px, 1.8vw, 28px);
   font-weight: 700;
   margin: 13px 0 5px;
   letter-spacing: -1px;
-  overflow-wrap: anywhere;
+  white-space: nowrap; /* keep numbers like 370,605 on one line */
 }
 
 .stat-subtitle {
@@ -911,4 +911,23 @@ footer {
   .severity {
     display: none;
   }
+}
+
+.alert-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 20px 0 0;
+  padding: 14px 18px;
+  border: 1px solid rgba(255, 122, 122, 0.45);
+  background: rgba(255, 122, 122, 0.08);
+  color: #ffd3d3;
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.alert-banner svg {
+  flex: none;
+  margin-top: 2px;
+  color: #ff7a7a;
 }

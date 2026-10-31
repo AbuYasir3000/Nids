@@ -37,6 +37,8 @@ class FakeImputer:
 
 
 class FakeGeneralizedClassifier:
+    classes_ = np.array([0, 1])
+
     def predict_proba(self, features):
         return np.array([[0.1, 0.9], [0.9, 0.1]])[: len(features)]
 
@@ -58,7 +60,22 @@ def make_detector():
     return detector
 
 
+class ReversedClassOrderClassifier:
+    classes_ = np.array([1, 0])
+
+    def predict_proba(self, features):
+        # Column zero is ATTACK because classes_ is [1, 0].
+        return np.array([[0.9, 0.1], [0.2, 0.8]])[: len(features)]
+
+
 class HybridDetectorTests(unittest.TestCase):
+    def test_positive_probability_uses_class_labels_not_column_position(self):
+        features = pd.DataFrame({"x": [1, 2]})
+        result = HybridNIDS._positive_class_probability(
+            ReversedClassOrderClassifier(), features
+        )
+        np.testing.assert_allclose(result, [0.9, 0.2])
+
     def test_feature_alignment_imputation_and_exclusions(self):
         detector = make_detector()
         incoming = pd.DataFrame(

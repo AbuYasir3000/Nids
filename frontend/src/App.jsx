@@ -50,12 +50,12 @@ function StatCard({ icon: Icon, title, value, subtitle, color }) {
 }
 
 function formatValue(value) {
-  if (value === null || value === undefined) return "â€”";
+  if (value === null || value === undefined) return "—";
   if (typeof value === "boolean") return value ? "Yes" : "No";
   if (typeof value === "number") {
     return Number.isFinite(value)
       ? Number(value.toFixed(5)).toString()
-      : "â€”";
+      : "—";
   }
   return String(value);
 }
@@ -176,6 +176,14 @@ export default function App() {
     results?.model_generalized_attack_count ?? 0
   );
   const behavioralFindings = results?.behavioral_findings;
+  const targetFloodFlowCount = Number(behavioralFindings?.target_flood_flow_count ?? 0);
+  const targetFloodEvent = behavioralFindings?.target_flood_events?.[0];
+  const behavioralFlowCount = Math.max(
+    Number(behavioralFindings?.high_rate_multiport_flow_count ?? 0),
+    Number(behavioralFindings?.source_burst_flow_count ?? 0),
+    targetFloodFlowCount,
+  );
+  const topBehavioralEvent = behavioralFindings?.events?.[0];
   const evaluation = results?.evaluation;
   const labeledClasses = Object.entries(
     evaluation?.classification_report ?? {}
@@ -191,7 +199,7 @@ export default function App() {
   const classChartData = sortedClasses.slice(0, 8).map((item) => ({
     name:
       item.name.length > 19
-        ? `${item.name.slice(0, 17)}â€¦`
+        ? `${item.name.slice(0, 17)}…`
         : item.name,
     fullName: item.name,
     flows: item.count,
@@ -330,11 +338,28 @@ export default function App() {
           </div>
         </section>
 
+        {results && behavioralFlowCount > 0 && predictedNonBenign === 0 && generalizedAttackCount === 0 && (
+          <section className="panel alert-banner" role="alert">
+            <AlertTriangle size={20} />
+            <div>
+              <strong>Possible scan or high-rate activity detected by behavioral rules.</strong>{" "}
+              The trained models flagged no attacks, but {behavioralFlowCount.toLocaleString()} flows
+              {topBehavioralEvent
+                ? ` (top source ${topBehavioralEvent.source_ip})`
+                : targetFloodEvent
+                  ? ` (aimed at ${targetFloodEvent.destination_ip})`
+                  : ""} matched the
+              port-diversity / source-rate / unanswered-flood rules. The models may not recognise this traffic
+              pattern; review the Behavioral Heuristic panel below.
+            </div>
+          </section>
+        )}
+
         <section className="stats-grid">
           <StatCard
             icon={Activity}
             title="Analyzed Flows"
-            value={results ? totalFlows.toLocaleString() : "â€”"}
+            value={results ? totalFlows.toLocaleString() : "—"}
             subtitle={results ? results.filename : "Upload a CSV to begin"}
             color="#66e3bf"
           />
@@ -342,7 +367,7 @@ export default function App() {
             icon={AlertTriangle}
             title="Non-Benign Predictions"
             value={
-              results ? predictedNonBenign.toLocaleString() : "â€”"
+              results ? predictedNonBenign.toLocaleString() : "—"
             }
             subtitle="Based on predicted classes"
             color="#ffb86b"
@@ -361,9 +386,24 @@ export default function App() {
             color="#a99bff"
           />
           <StatCard
+            icon={AlertTriangle}
+            title="Behavioral Alerts"
+            value={results ? behavioralFlowCount.toLocaleString() : "—"}
+            subtitle={
+              results
+                ? topBehavioralEvent
+                  ? `Top source ${topBehavioralEvent.source_ip} (heuristic, not a model)`
+                  : targetFloodEvent
+                    ? `Flood aimed at ${targetFloodEvent.destination_ip} (heuristic, not a model)`
+                    : "No source-rate, port-scan or flood rule matched"
+                : "Rule-based signals"
+            }
+            color="#ff7a7a"
+          />
+          <StatCard
             icon={CheckCircle2}
             title="Anomalies"
-            value={results ? anomalyCount.toLocaleString() : "â€”"}
+            value={results ? anomalyCount.toLocaleString() : "—"}
             subtitle={
               results && totalFlows
                 ? `${((anomalyCount / totalFlows) * 100).toFixed(2)}% flagged`
@@ -454,6 +494,11 @@ export default function App() {
             {behavioralFindings.events?.map((event) => (
               <p key={event.event_id}>
                 {event.classification}: {event.source_ip}, {event.window_start} to {event.last_observed_at}; {Number(event.flow_count).toLocaleString()} associated flows, {Number(event.unique_destination_ports).toLocaleString()} destination ports across {Number(event.unique_destination_ips).toLocaleString()} destination IPs. Top destination: {event.top_destination_ips?.[0]?.destination_ip ?? "unavailable"}. Reason: {event.reasons?.join("; ")}.
+              </p>
+            ))}
+            {behavioralFindings.target_flood_events?.map((event) => (
+              <p key={`${event.destination_ip}|${event.window_start}`}>
+                {event.classification}: target {event.destination_ip}, minute starting {event.window_start}; {Number(event.flows).toLocaleString()} flows, {(Number(event.unanswered_share) * 100).toFixed(1)}% unanswered{event.unique_sources != null ? `, ${Number(event.unique_sources).toLocaleString()} distinct sources` : ""}. Threshold: more than {Number(event.flow_threshold).toLocaleString()} flows per minute (uncalibrated development rule).
               </p>
             ))}
             <p className="table-note">{behavioralFindings.note}</p>

@@ -13,6 +13,49 @@ A final year project that explores supervised and anomaly based detection on net
 
 The Random Forest class, generalized binary classifier, source-burst heuristic, and Isolation Forest anomaly flag are separate signals. Learned model counts exclude source-burst and port-diversity heuristics; heuristics are shown separately because they can match benign high-volume traffic and do not identify an attack family. The source-rate threshold was calibrated on CIC-IDS2017 and is not validated for every dataset. Counts are flow-level, not deduplicated incidents. Calibration and development-capture results are documented in `reports/port_diversity_rule_evaluation.txt`.
 
+## PCAP feature compatibility and the v2 Random Forest
+
+Python CICFlowMeter (used for PCAP uploads) measures packet length as the whole Ethernet frame and header length from the IP header, while CIC-IDS2017 (Java CICFlowMeter) uses payload bytes and the TCP/UDP header. A bare SYN probe is 58 bytes in one and 0 in the other, which pushed scan traffic out of the training distribution. `src/cic_compat.py` patches CICFlowMeter in-process (called from `convert_pcap_to_csv`) so lengths and header sizes follow CIC-IDS2017. CSV uploads are unaffected.
+
+That alone did not make the original Random Forest detect a scan from another tool, because the model also depends on CIC-specific artifacts (for example its flag-count columns). `src/train_rf_with_pcap.py` retrains the Random Forest on a CIC-IDS2017 sample plus a labelled capture and writes `models/random_forest_v2.joblib`; `hybrid_detector.py` uses it when present (delete or rename it to use `random_forest.joblib`). Results are in `reports/random_forest_v2_report.txt`.
+
+```powershell
+python src/train_rf_with_pcap.py --sample cicids2017_sample.csv.gz --flows flows.csv --scanner-ip 192.168.2.5
+```
+
+Limits: capture labels are assumed (source = scanner IP is a scan, everything else benign), the capture is one scanner on one network so held-out-host scores are optimistic, and the sample is a subset of CIC-IDS2017. `src/retrain_aux_models.py` is an experiment, not used by the app: a retrained binary classifier caught the scan but lost cross-capture DDoS recall, and the Isolation Forest did not change (`reports/auxiliary_models_v2_report.txt`).
+
+## Check the accuracy of the project
+
+`check_accuracy.py` runs every detector on labelled data and prints one table (attack detection rate, false alarm rate, precision, accuracy) plus a per-attack-type breakdown. It saves `reports/accuracy_summary.md` and `.csv`.
+
+```powershell
+.venv\Scripts\python.exe check_accuracy.py --csv path\to\labelled_flows.csv
+.venv\Scripts\python.exe check_accuracy.py --pcap scan_A.pcap --attacker-ip 192.168.2.5
+```
+
+A CSV needs a `Label` column. A pcap has no labels, so `--attacker-ip` says which source IP is the attacker (assumption). Scores on data the models were trained on are optimistic; use a capture or CSV the models have never seen for an honest number.
+
+## Test captures
+
+`make_test_pcaps.py` generates labelled synthetic captures in `test_pcaps/` (benign only, a connect scan, a SYN flood, a UDP flood, and benign traffic with a hidden scan) plus `ground_truth.csv` with the attacker IP for each. Nothing is sent on a network; the files are written to disk. Upload one in the dashboard or run `check_accuracy.py --pcap test_pcaps/<file> --attacker-ip <ip>` (several IPs may be separated by commas). The traffic is simulated, so it is a sanity test, not a substitute for real captures.
+
+## Flood rule (unanswered flows to one target)
+
+`target_flood_analysis` in `src/traffic_features.py` flags a destination that receives more than 1,000 flows in one minute when at least 90% of them get no reply packet and have at most 2 forward packets, which is the shape of a SYN or UDP flood. The size check means a capture that only recorded one direction of traffic (replies missing) does not trip the rule: on a simulated busy one-way capture of 9,276 normal flows the rule without the size check flagged 6,035 flows and with it flagged none. It is a behavioral rule, shown with the other behavioral signals and never counted as a model prediction. The thresholds are development defaults and are NOT calibrated on benign data (the CIC sample is down-sampled, so per-target counts cannot be calibrated from it). Expect false alarms on, for example, a scan of a firewalled host, and validate on your own network before relying on it. On the synthetic `test_pcaps` it catches the SYN and UDP floods and raises no false alarms on the benign, scan and mixed captures.
+
+## Random Forest v3 (adds UDPLag)
+
+`src/train_rf_v3.py` extends v2 with a sample of CIC-DDoS2019 `UDPLag.csv`. `hybrid_detector.py` loads `models/random_forest_v3.joblib` first, then v2, then the original `random_forest.joblib`; rename a file to fall back.
+
+```powershell
+python src/train_rf_v3.py --sample cicids2017_sample_ids2017.csv.gz --flows flows.csv --scanner-ip 192.168.2.5 --udplag udplag_sample.csv.gz
+```
+
+UDPLag rows are split by time, so the test uses minutes the model never saw. Results are in `reports/random_forest_v3_report.txt`: on the unseen UDPLag minute v3 detects 99.8% of attack flows with 0.13% benign false alarms (original and v2: 0%). Nothing is lost elsewhere: with v2 and v3 both trained without the test rows, the CIC-IDS2017 holdout scores 99.46% accuracy / 0.20% benign false alarms for v2 and 99.49% / 0.17% for v3, and the scan capture's held-out hosts score 100% for both. Most remaining CIC errors are Web Attack Brute Force vs XSS mix-ups, a near-identical pair in that dataset. The saved `random_forest_v2.joblib` and `random_forest_v3.joblib` are refit on all the data, so do not score them on the same rows to compare them.
+
+Two caveats worth stating in any write-up. First, in `UDPLag.csv` only the first burst (13:04) is real UDP; about 96% of the labelled attack flows (13:29-13:30) are TCP with no payload and no reply, so the label covers two different kinds of traffic. A strict split that trains only on the UDP burst detects almost none of the TCP bursts (`reports/random_forest_v3_report_strict_time_split.txt`). Second, the data is one capture on one network and is down-sampled, so the numbers do not show that other UDP attacks are detected.
+
 ## Repository layout
 
 - `src/hybrid_detector.py`: model loading, feature alignment, and inference.
@@ -133,3 +176,18 @@ Report the dataset version, capture split, preprocessing, class balance, per-cla
 ## Defensive-use note
 
 This project is for academic research and defensive cybersecurity education. Predictions require human review and should not be used alone to block traffic or make security decisions.
+
+
+### Important: external dataset evaluation
+
+The Random Forest predicts only the attack families present in its saved `classes_`
+from CIC-IDS2017. A dataset with a new label (for example, `UDP-lag` or `WebDDoS`)
+will not become a supported class merely because its columns have similar names.
+Review the API's `unsupported_actual_label_counts` before interpreting multiclass
+metrics on another capture. The generalized binary model and Isolation Forest are
+separate signals: anomaly flags are not confirmed attacks, and their counts must not
+be added together as if they were one classifier's predictions.
+
+The serialized models were created with scikit-learn 1.9.1. Install the pinned
+version in `requirements.txt` before loading them; scikit-learn does not guarantee
+compatibility when loading joblib/pickle artifacts created by a different version.

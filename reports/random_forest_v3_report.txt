@@ -1,0 +1,33 @@
+Random Forest v3 (CIC-IDS2017 sample + scan capture + UDPLag)
+Train rows: 126,070 (CIC 100,258, scan capture 18,416, UDPLag 7,396)
+UDPLag split by time: attacks before 2018-12-01 13:30:00 and benign before 2018-12-01 13:25:00 train (7,396 rows); the later rows test (4,748 rows, never seen)
+Scan-capture held-out hosts: ['10.0.0.12', '10.0.0.15', '10.0.0.18', '10.0.0.21', '10.0.0.6']
+Capture labels ASSUMED: source == 192.168.2.5 -> PortScan, else BENIGN.
+
+UDPLag, later time window (never trained on)
+  original*    attack recall   0.00%   benign false alarms  0.00%   exact-label accuracy  16.66%   (3,957 attacks, 791 benign)
+  v2 (no UDP)  attack recall   0.00%   benign false alarms  0.00%   exact-label accuracy  16.66%   (3,957 attacks, 791 benign)
+  v3           attack recall  99.80%   benign false alarms  0.13%   exact-label accuracy  99.81%   (3,957 attacks, 791 benign)
+
+Scan capture, held-out hosts
+  original*    attack recall   0.00%   benign false alarms  0.00%   exact-label accuracy  19.13%   (6,010 attacks, 1,422 benign)
+  v2 (no UDP)  attack recall 100.00%   benign false alarms  0.00%   exact-label accuracy 100.00%   (6,010 attacks, 1,422 benign)
+  v3           attack recall 100.00%   benign false alarms  0.00%   exact-label accuracy 100.00%   (6,010 attacks, 1,422 benign)
+
+CIC-IDS2017 sample, 20% holdout
+  original*    attack recall  99.98%   benign false alarms  0.05%   exact-label accuracy  98.21%   (12,265 attacks, 12,800 benign)
+  v2 (no UDP)  attack recall  99.82%   benign false alarms  0.20%   exact-label accuracy  99.46%   (12,265 attacks, 12,800 benign)
+  v3           attack recall  99.82%   benign false alarms  0.17%   exact-label accuracy  99.49%   (12,265 attacks, 12,800 benign)
+
+* original: trained on the full CIC-IDS2017 data, so it may have seen the CIC rows; its numbers are not a clean holdout.
+v2 (no UDP) and v3 are trained here on the same CIC and scan-capture rows (v3 adds UDPLag) and have never seen any test row.
+
+UDPLag test rows, per label (v3 exact class):
+  BENIGN        791 flows -> 99.87% predicted as BENIGN
+  UDP-lag     3,935 flows -> 99.82% predicted as UDP-lag
+  WebDDoS        22 flows -> 95.45% predicted as WebDDoS
+
+Dataset note: in UDPLag.csv the 13:04 'UDP-lag' flows are real UDP, but the 13:29-13:30 flows
+(about 96% of the attack) are TCP with no payload and no reply, i.e. SYN-flood-like.
+CAUTION: UDPLag is one attack on one network; the time split tests later bursts of the
+same attack, not other UDP attacks. The sample is down-sampled (8,000 UDP-lag rows of 366,461).

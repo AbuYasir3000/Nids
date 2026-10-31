@@ -1,0 +1,19 @@
+Cross-capture generalized attack model training
+=================================================
+Model: HistGradientBoostingClassifier
+Training rows: 158,017
+Training features: 80
+Training captures: Friday-WorkingHours-Morning.pcap_ISCX.csv, Monday-WorkingHours.pcap_ISCX.csv, Thursday-WorkingHours-Afternoon-Infilteration.pcap_ISCX.csv, Thursday-WorkingHours-Morning-WebAttacks.pcap_ISCX.csv, Tuesday-WorkingHours.pcap_ISCX.csv, Wednesday-workingHours.pcap_ISCX.csv
+PortScan capture excluded from training and calibration: Friday-WorkingHours-Afternoon-PortScan.pcap_ISCX.csv
+Calibration capture: Friday-WorkingHours-Afternoon-DDos.pcap_ISCX.csv
+Target benign false-positive rate: 0.100%
+Calibrated decision threshold: 0.9916187807
+Observed calibration benign false-positive rate: 0.0931%
+Source-flow burst threshold (flows/source/minute): 2085
+Source-flow burst calibration false-positive rate: 0.0000%
+Source-flow burst DDoS-capture attack recall (diagnostic): 98.9448%
+Calibration-capture attack recall (diagnostic): 20.6995%
+The threshold is selected using benign rows only.
+PortScan must be treated as an exploratory benchmark after model selection.
+Model artifact: C:\Users\walke\hybrid-nids\models\novel_attack_generalizer.joblib
+Elapsed seconds: 60.8

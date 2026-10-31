@@ -1,0 +1,122 @@
+SentinelAI labeled CSV evaluation
+==================================
+Input: C:\Users\walke\Desktop\01-12\UDPLag.csv
+Rows: 370,605; labeled rows: 370,605; excluded unlabeled rows: 0
+Original columns: 88
+
+Ground-truth label distribution:
+  UDP-lag: 366,461
+  BENIGN: 3,705
+  WebDDoS: 439
+
+Feature/schema checks:
+  Random Forest: compatible by exact feature names (80)
+  Isolation Forest: compatible by exact feature names (80)
+  Learned binary classifier: compatible by exact feature names (80)
+  RF vs IF schema order: same names and order
+  Semantic feature definitions/units: feature names are checked against the local cleaned training CSV below; the CSV does not record extractor version or a full feature-definition contract.
+  Model input excludes Label, Flow ID, Source IP, Destination IP, Timestamp, and Unnamed: 0; extra columns are not selected by any artifact.
+  CIC-IDS2017 cleaned training reference: 2,830,540 rows, 85 columns; missing expected RF features=[].
+  Flow Duration training range: -13.0 to 119999998.0; zero-duration rows=2,863.
+  Training rate cells made invalid by cleaning: {'Flow Bytes/s': 2863, 'Flow Packets/s': 2863}
+  Fwd Header Length duplicate mismatches in training reference: 0.
+
+Random Forest multiclass results:
+  Trained output classes: BENIGN, Bot, DDoS, DoS GoldenEye, DoS Hulk, DoS Slowhttptest, DoS slowloris, FTP-Patator, Heartbleed, Infiltration, PortScan, SSH-Patator, Web Attack – Brute Force, Web Attack – Sql Injection, Web Attack – XSS
+  Unsupported actual-label rows (excluded from supported-class metrics): 366,900
+  Unsupported actual labels: {'UDP-lag': 366461, 'WebDDoS': 439}
+  Invalid/missing feature cells imputed from saved RF training medians: 72,806
+  Feature columns requiring imputation: {'Flow Packets/s': 36403, 'Flow Bytes/s': 36403}
+  Prediction counts:
+    BENIGN: 370,577
+    SSH-Patator: 26
+    Web Attack – Brute Force: 2
+  Strict exact-label agreement across all rows: 0.009997 (unsupported actual classes count as misses; this is not supported-class multiclass performance).
+  Strict confusion matrix (rows=true, columns=predicted; labels=['BENIGN', 'SSH-Patator', 'UDP-lag', 'Web Attack – Brute Force', 'WebDDoS']):
+[[  3705      0      0      0      0]
+ [     0      0      0      0      0]
+ [366435     26      0      0      0]
+ [     0      0      0      0      0]
+ [   437      0      0      2      0]]
+  Strict per-class report (unsupported labels remain explicit):
+                          precision    recall  f1-score   support
+
+                  BENIGN       0.01      1.00      0.02      3705
+             SSH-Patator       0.00      0.00      0.00         0
+                 UDP-lag       0.00      0.00      0.00    366461
+Web Attack – Brute Force       0.00      0.00      0.00         0
+                 WebDDoS       0.00      0.00      0.00       439
+
+                accuracy                           0.01    370605
+               macro avg       0.00      0.20      0.00    370605
+            weighted avg       0.00      0.01      0.00    370605
+
+  Actual-label support and RF prediction counts:
+    BENIGN: support=3,705; model_prediction_count=370,577; correct_exact_matches=3,705; trained_class=yes
+    UDP-lag: support=366,461; model_prediction_count=0; correct_exact_matches=0; trained_class=no
+    WebDDoS: support=439; model_prediction_count=0; correct_exact_matches=0; trained_class=no
+  Supported-label confusion matrix (rows=true, columns=predicted; labels=['BENIGN']):
+[[3705]]
+  No multiclass performance report: BENIGN is the only ground-truth class supported by this artifact.
+  Interpretation: UDP-lag/WebDDoS are not RF classes. Their exact-label detection rate is zero by model design; no attack-family mapping was invented.
+
+Learned binary classifier (positive=ATTACK, negative=BENIGN):
+  Calibration capture: Friday-WorkingHours-Afternoon-DDos.pcap_ISCX.csv
+  Saved threshold: 0.9916187807; invalid/missing feature cells handled by saved fitted imputer: 72,806
+  Feature columns requiring imputation: {'Flow Packets/s': 36403, 'Flow Bytes/s': 36403}
+  Flow-level metrics:
+  Confusion matrix [[TN, FP], [FN, TP]]: [[3705, 0], [366889, 11]]
+  Accuracy=0.010027; balanced_accuracy=0.500015; macro_F1=0.009928
+  Attack precision=1.000000; recall=0.000030; F1=0.000060
+  BENIGN false-positive rate=0.0
+  Detection rate by actual class:
+    UDP-lag: support=366,461; predicted_attack=4; detection_rate=0.000011
+    BENIGN: support=3,705; predicted_attack=0; detection_rate=0.000000
+    WebDDoS: support=439; predicted_attack=7; detection_rate=0.015945
+  Interpretation: this is a valid exact-capture binary comparison (BENIGN vs all labeled attacks), but one capture does not establish generalization to other UDP-lag deployments.
+
+Isolation Forest anomaly output (anomaly is not a confirmed attack):
+  Saved score threshold/offset: -0.5; invalid/missing feature cells imputed from saved medians: 72,806
+  Feature columns requiring imputation: {'Flow Packets/s': 36403, 'Flow Bytes/s': 36403}
+  Attack-vs-benign diagnostic only:
+  Confusion matrix [[TN, FP], [FN, TP]]: [[3378, 327], [359099, 7801]]
+  Accuracy=0.030164; balanced_accuracy=0.466501; macro_F1=0.030026
+  Attack precision=0.959769; recall=0.021262; F1=0.041602
+  BENIGN false-positive rate=0.08825910931174089
+  Anomalies by actual class:
+    UDP-lag: support=366,461; anomalies=7,800; rate=0.021285
+    BENIGN: support=3,705; anomalies=327; rate=0.088259
+    WebDDoS: support=439; anomalies=1; rate=0.002278
+
+Behavioral rules (heuristics; not model predictions):
+  Source-flow threshold: >2,085 rows per source/minute; port-diversity threshold: >54 unique destination ports per source/minute.
+  Flow rows matched source-burst rule: 360,038
+  Source-burst flow-level comparison:
+  Confusion matrix [[TN, FP], [FN, TP]]: [[3705, 0], [6862, 360038]]
+  Accuracy=0.981484; balanced_accuracy=0.990649; macro_F1=0.754879
+  Attack precision=1.000000; recall=0.981297; F1=0.990560
+  BENIGN false-positive rate=0.0
+  Flow rows matched combined high-rate/multiport heuristic: 360,038
+  High-rate/multiport flow-level comparison:
+  Confusion matrix [[TN, FP], [FN, TP]]: [[3705, 0], [6862, 360038]]
+  Accuracy=0.981484; balanced_accuracy=0.990649; macro_F1=0.754879
+  Attack precision=1.000000; recall=0.981297; F1=0.990560
+  BENIGN false-positive rate=0.0
+  Source-minute groups: 427; rows excluded from event grouping for missing source/time: 0
+  Deduplicated alert events: 4.
+  Event-level precision/recall not reported: the dataset labels flows, not source-minute events or incidents.
+  Alert event evidence:
+    source=172.16.0.5; window=2018-12-01 13:04:00 to 2018-12-01 13:04:59.999847; flows=40,352; unique_dst_ports=7,388; unique_dst_ips=1; top_dst=192.168.50.1 (40,352); top_ports=16826 (19), 35317 (18), 61980 (18); labels=UDP-lag, WebDDoS; reason=source-rate threshold exceeded; destination-port-diversity threshold exceeded
+    source=172.16.0.5; window=2018-12-01 13:05:00 to 2018-12-01 13:05:59.514666; flows=2,616; unique_dst_ports=535; unique_dst_ips=1; top_dst=192.168.50.1 (2,616); top_ports=28680 (15), 62385 (15), 46840 (15); labels=UDP-lag, WebDDoS; reason=source-rate threshold exceeded; destination-port-diversity threshold exceeded
+    source=172.16.0.5; window=2018-12-01 13:29:00 to 2018-12-01 13:29:59.999862; flows=136,150; unique_dst_ports=57,125; unique_dst_ips=1; top_dst=192.168.50.1 (136,150); top_ports=22 (12), 14007 (12), 24357 (11); labels=UDP-lag, WebDDoS; reason=source-rate threshold exceeded; destination-port-diversity threshold exceeded
+    source=172.16.0.5; window=2018-12-01 13:30:00 to 2018-12-01 13:30:30.740425; flows=180,920; unique_dst_ports=57,487; unique_dst_ips=1; top_dst=192.168.50.1 (180,920); top_ports=54535 (15), 80 (14), 26034 (14); labels=UDP-lag, WebDDoS; reason=source-rate threshold exceeded; destination-port-diversity threshold exceeded
+  These single-capture heuristic metrics describe this labeled file only; they do not calibrate or validate thresholds for other data.
+
+Count consistency:
+  Rows evaluated by each available detector: 370,605
+  Label rows excluded (missing/blank/NaN): 0
+  Prediction counts above sum to the rows evaluated for that detector; heuristic event counts are deduplicated source-minute groups and must not be added to flow-level model/anomaly counts.
+
+Limitations:
+  The local cleaned CIC-IDS2017 reference confirms matching feature names, similar duration scale, and an identical duplicate header, but does not record extractor version or prove every feature definition is identical.
+  No model was trained, tuned, or overwritten by this evaluation.

@@ -1,0 +1,26 @@
+Cross-capture generalized model: held-out PortScan evaluation
+==============================================================
+Capture: Friday-WorkingHours-Afternoon-PortScan.pcap_ISCX.csv
+Training rows: 158,017
+Features: 80
+Evaluation rows: 286,467
+Threshold calibrated on: Friday-WorkingHours-Afternoon-DDos.pcap_ISCX.csv benign rows
+Calibration target false-positive rate: 0.100%
+Calibration observed false-positive rate: 0.0931%
+Model decision threshold: 0.9916187807
+Source flow burst threshold (per source per minute): 2085
+Model-only attack recall: 0.2366%
+Burst-rule attack recall: 97.8777%
+
+Accuracy: 98.7210%
+Balanced accuracy: 98.8152%
+Macro F1: 0.9871
+Attack precision: 99.7341%
+Attack recall: 97.9557%
+Benign false-positive rate: 0.3254%
+ROC AUC: 0.9118
+Confusion matrix TN/FP/FN/TP: 127122/415/3249/155681
+
+The PortScan capture is excluded from training and threshold calibration.
+The combined alert is the OR of the calibrated model and source-flow burst rule.
+Treat this as a development result; confirm generalization on an independent dataset.

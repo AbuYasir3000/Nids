@@ -1,0 +1,18 @@
+Retrained auxiliary models (CIC-IDS2017 sample + labelled capture)
+Held-out capture hosts: ['10.0.0.12', '10.0.0.15', '10.0.0.18', '10.0.0.21', '10.0.0.6']
+Capture labels ASSUMED: source == 192.168.2.5 -> attack.
+
+Isolation Forest: share of flows flagged as anomalous
+  CIC benign (held-out 20%)                  new   7.91%   old   8.48%
+  CIC attacks                                new  37.38%   old  37.83%
+  Capture benign, held-out hosts             new   0.00%   old   0.00%
+  Capture scanner flows, held-out hosts      new   0.00%   old   0.00%
+
+Binary classifier: share of flows flagged (threshold new 0.9996, old 0.9916)
+  CIC PortScan capture (never trained on)          new   0.01%   old   0.18%
+  CIC DDoS capture attacks (calibration capture)   new   0.00%   old  21.04%
+  Capture scanner flows, held-out hosts            new  99.58%   old   0.00%
+  Capture benign, held-out hosts                   new   0.00%   old   0.00%
+  CIC PortScan capture benign                      new   0.35%   old   0.26%
+Held-out-host benign rows were used to calibrate the new threshold, so their
+false-positive rate is optimistic. One scanner and one network: not independent proof.

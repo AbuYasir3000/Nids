@@ -26,6 +26,7 @@ from src.pcap_converter import convert_pcap_to_csv, normalize_flow_columns
 from src.traffic_features import (
     PORT_DIVERSITY_THRESHOLD,
     source_minute_event_table,
+    target_flood_analysis,
 )
 
 
@@ -502,12 +503,22 @@ async def analyze_csv(file: UploadFile = File(...)):
             ).sum()
         )
         behavioral_alerts = behavioral_events.to_dict(orient="records")
+        # Separate rule: floods of unanswered flows aimed at one target.
+        target_flood_flags, target_flood_events = target_flood_analysis(df)
+        target_flood_flow_count = int(target_flood_flags.sum())
+        target_flood_alerts = target_flood_events.to_dict(orient="records")
         behavioral_findings = {
             "classification": (
                 "Source-minute behavioral signals observed"
                 if behavioral_alerts
-                else "No source-minute behavioral signals observed"
+                else (
+                    "Flood of unanswered flows to one target observed"
+                    if target_flood_flow_count
+                    else "No source-minute behavioral signals observed"
+                )
             ),
+            "target_flood_flow_count": target_flood_flow_count,
+            "target_flood_events": target_flood_alerts,
             "source_burst_event_count": source_burst_event_count,
             "source_burst_flow_count": source_burst_flow_count,
             "high_rate_multiport_event_count": high_rate_multiport_event_count,
@@ -554,6 +565,7 @@ async def analyze_csv(file: UploadFile = File(...)):
             "source_burst_flow_count": source_burst_flow_count,
             "high_rate_multiport_event_count": high_rate_multiport_event_count,
             "high_rate_multiport_flow_count": high_rate_multiport_flow_count,
+            "target_flood_flow_count": target_flood_flow_count,
             "flagged_flow_count": flagged_flow_count,
             "behavioral_findings": behavioral_findings,
             "counting_note": (

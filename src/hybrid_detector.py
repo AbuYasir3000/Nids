@@ -5,14 +5,28 @@ import numpy as np
 import pandas as pd
 
 try:
-    from .traffic_features import high_rate_multiport_flags, source_flows_per_minute
+    from .traffic_features import (
+        high_rate_multiport_flags, source_flows_per_minute, target_flood_analysis,
+    )
 except ImportError:
-    from traffic_features import high_rate_multiport_flags, source_flows_per_minute
+    from traffic_features import (
+        high_rate_multiport_flags, source_flows_per_minute, target_flood_analysis,
+    )
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 MODEL_DIR = PROJECT_ROOT / "models"
 
-RF_PATH = MODEL_DIR / "random_forest.joblib"
+# Prefer the newest retrained Random Forest when present: v3 (adds UDPLag), then
+# v2 (adds a scan capture), then the original. Delete or rename the v3/v2 files
+# to fall back to an older model.
+def _pick_rf_path():
+    for name in ("random_forest_v3.joblib", "random_forest_v2.joblib"):
+        if (MODEL_DIR / name).exists():
+            return MODEL_DIR / name
+    return MODEL_DIR / "random_forest.joblib"
+
+
+RF_PATH = _pick_rf_path()
 IF_PATH = MODEL_DIR / "isolation_forest.joblib"
 GENERALIZED_PATH = MODEL_DIR / "novel_attack_generalizer.joblib"
 
@@ -114,6 +128,32 @@ class HybridNIDS:
             raise ValueError(f"{name} artifact includes target/identifier features: {leaked}")
 
     @staticmethod
+    def _positive_class_probability(model, features):
+        """Return probability for the learned ATTACK class (label 1).
+
+        Never assume that the positive class is in probability column 1: the
+        order is defined by ``model.classes_`` and can differ across estimators.
+        """
+        if not hasattr(model, "predict_proba"):
+            raise TypeError("Learned binary classifier must implement predict_proba().")
+        classes = np.asarray(getattr(model, "classes_", []))
+        positive_indices = [
+            index for index, label in enumerate(classes)
+            if str(label).strip().casefold() in {"1", "attack", "true"}
+        ]
+        if len(positive_indices) != 1:
+            raise ValueError(
+                "Cannot identify the learned ATTACK class in classifier classes_ "
+                f"{classes.tolist()}. Expected exactly one class labeled 1/ATTACK."
+            )
+        probabilities = np.asarray(model.predict_proba(features))
+        if probabilities.ndim != 2 or probabilities.shape[1] != len(classes):
+            raise ValueError(
+                "Classifier probability output does not match its classes_ schema."
+            )
+        return probabilities[:, positive_indices[0]]
+
+    @staticmethod
     def _validate_feature_count(name, component, feature_columns):
         count = getattr(component, "n_features_in_", len(feature_columns))
         if int(count) != len(feature_columns):
@@ -210,6 +250,8 @@ class HybridNIDS:
         else:
             is_high_rate_multiport = np.zeros(len(X), dtype=bool)
         results["is_high_rate_multiport_activity"] = is_high_rate_multiport
+        is_target_flood, _ = target_flood_analysis(original)
+        results["is_target_flood_activity"] = is_target_flood
 
         if self.generalized_model is not None:
             general_features, _ = self._prepare_named_features(
@@ -221,9 +263,9 @@ class HybridNIDS:
             general_features = self.generalized_imputer.transform(
                 general_features
             ).astype("float32")
-            attack_probability = self.generalized_model.predict_proba(
-                general_features
-            )[:, 1]
+            attack_probability = self._positive_class_probability(
+                self.generalized_model, general_features
+            )
             is_model_generalized_attack = (
                 attack_probability > self.generalized_threshold
             )
@@ -261,6 +303,7 @@ class HybridNIDS:
                 indicator for indicator, condition in (
                     ("high destination-port diversity", is_high_rate_multiport[index]),
                     ("high source flow rate", is_source_burst_alert[index]),
+                    ("flood of unanswered flows to one target", is_target_flood[index]),
                     ("multiple destination ports in source-minute window", behavior["ports"][index] > 1),
                     ("multiple destination IPs in source-minute window", behavior["destinations"][index] > 1),
                 ) if condition
@@ -268,29 +311,31 @@ class HybridNIDS:
             for index in range(len(X))
         ]
         results["decision_label"] = np.select(
-            [known_attack, is_model_generalized_attack, is_high_rate_multiport, is_source_burst_alert, is_anomaly],
+            [known_attack, is_model_generalized_attack, is_high_rate_multiport, is_source_burst_alert, is_target_flood, is_anomaly],
             [
                 np.array([f"Known attack: {name}" for name in rf_predictions], dtype=object),
                 "Suspicious - binary attack signal; family unknown",
                 "Behavioral signal - high-rate multiport activity",
                 "Behavioral signal - high source flow rate",
+                "Behavioral signal - flood of unanswered flows to one target",
                 "Anomalous - attack type unknown",
             ],
             default="Insufficient evidence",
         )
         results["decision_explanation"] = np.select(
-            [known_attack, is_model_generalized_attack, is_high_rate_multiport, is_source_burst_alert, is_anomaly],
+            [known_attack, is_model_generalized_attack, is_high_rate_multiport, is_source_burst_alert, is_target_flood, is_anomaly],
             [
                 "Random Forest predicted a supported non-benign class.",
                 "The calibrated binary classifier exceeded its saved decision threshold.",
                 "Source rate and destination-port diversity exceeded a CIC-calibrated heuristic; not a model prediction.",
                 "Source flows per minute exceeded a CIC-calibrated heuristic; not a model prediction.",
+                "Over 1,000 flows reached one target in a minute and 90% or more got no reply (uncalibrated development rule; not a model prediction).",
                 "Isolation Forest flagged this flow; no attack family is inferred.",
             ],
             default="No configured model or calibrated rule flagged this flow.",
         )
         results["severity"] = np.select(
-            [known_attack | is_model_generalized_attack, is_source_burst_alert, is_anomaly],
+            [known_attack | is_model_generalized_attack, is_source_burst_alert | is_target_flood, is_anomaly],
             ["high", "medium", "low"],
             default="none",
         )

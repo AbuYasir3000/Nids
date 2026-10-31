@@ -1,0 +1,60 @@
+Saved binary model diagnostics (no production artifact modified)
+===============================================================
+Artifact: novel_attack_generalizer.joblib; threshold=0.9916187807; features=80
+Training captures: Friday-WorkingHours-Morning.pcap_ISCX.csv, Monday-WorkingHours.pcap_ISCX.csv, Thursday-WorkingHours-Afternoon-Infilteration.pcap_ISCX.csv, Thursday-WorkingHours-Morning-WebAttacks.pcap_ISCX.csv, Tuesday-WorkingHours.pcap_ISCX.csv, Wednesday-workingHours.pcap_ISCX.csv
+Calibration capture: Friday-WorkingHours-Afternoon-DDos.pcap_ISCX.csv; target FPR=0.100%; observed FPR=0.0931%
+Training preprocessing: fitted SimpleImputer(strategy=median), then float32; HistGradientBoostingClassifier(class_weight=balanced).
+Labels are collapsed to BENIGN=0 and every non-BENIGN CIC label=1; UDP-lag/WebDDoS are not represented in this training label taxonomy.
+The threshold is the 'higher' quantile of benign scores at 99.9%, then predictions use strict score > threshold. This is deliberately conservative to target low benign FPR.
+
+Saved model score distribution on Friday-WorkingHours-Afternoon-DDos.pcap_ISCX.csv (not a new independent test):
+  scores: rows=225,745; attacks=128,027; benign=97,718
+  BENIGN probability min/median/p90/p99/p99.9/max=1.78323e-06/1.7794484e-05/0.0065434387/0.053139835/0.99161878/0.99992726
+  ATTACK probability min/median/p90/p99/p99.9/max=1.0152753e-05/0.96540261/0.99905016/0.9998493/0.99986541/0.99992144
+  {'threshold': 0.9916187806666924, 'tn': 97627, 'fp': 91, 'fn': 101526, 'tp': 26501, 'precision': 0.9965779181708785, 'recall': 0.20699539940793737, 'f1': 0.34279098946442543, 'macro_f1': 0.5002487677026275, 'benign_precision': 0.4902110437703675, 'benign_recall': 0.999068748848728, 'benign_f1': 0.6577065459408296, 'benign_support': 97718, 'attack_support': 128027, 'balanced_accuracy': 0.6030320741283327, 'benign_fpr': 0.0009312511512720277, 'accuracy': 0.5498593545814968}
+
+Saved model score distribution on Friday-WorkingHours-Afternoon-PortScan.pcap_ISCX.csv (not a new independent test):
+  scores: rows=286,467; attacks=158,930; benign=127,537
+  BENIGN probability min/median/p90/p99/p99.9/max=1.7647924e-06/1.0495882e-05/0.00012332001/0.008749038/0.99980747/0.99985803
+  ATTACK probability min/median/p90/p99/p99.9/max=6.6389704e-06/0.00024725257/0.0043564826/0.58164275/0.99910193/0.99995417
+  {'threshold': 0.9916187806666924, 'tn': 127123, 'fp': 414, 'fn': 158554, 'tp': 376, 'precision': 0.4759493670886076, 'recall': 0.0023658214308185993, 'f1': 0.004708239418983221, 'macro_f1': 0.30999858480505954, 'benign_precision': 0.44498857100851663, 'benign_recall': 0.9967538831868399, 'benign_f1': 0.6152889301911358, 'benign_support': 127537, 'attack_support': 158930, 'balanced_accuracy': 0.49955985230882927, 'benign_fpr': 0.0032461168131601025, 'accuracy': 0.4450739526716864}
+
+Saved model score distribution on UDPLag.csv (diagnostic only; not used for tuning):
+  scores: rows=370,605; attacks=366,900; benign=3,705
+  BENIGN probability min/median/p90/p99/p99.9/max=3.4754837e-06/1.4412969e-05/0.00030418462/0.381939/0.39800816/0.76114898
+  ATTACK probability min/median/p90/p99/p99.9/max=4.8052784e-06/5.2955546e-05/0.0024169791/0.014541135/0.23265526/0.99918217
+  {'threshold': 0.9916187806666924, 'tn': 3705, 'fp': 0, 'fn': 366889, 'tp': 11, 'precision': 1.0, 'recall': 2.998092123194331e-05, 'f1': 5.996004480650621e-05, 'macro_f1': 0.009928483625137966, 'benign_precision': 0.009997463531519668, 'benign_recall': 1.0, 'benign_f1': 0.019797007205469425, 'benign_support': 3705, 'attack_support': 366900, 'balanced_accuracy': 0.5000149904606159, 'benign_fpr': 0.0, 'accuracy': 0.010026847991797197}
+  Zero-duration rows=36,403; invalid Flow Bytes/s cells=36,403; invalid Flow Packets/s cells=36,403.
+  BENIGN: zero-duration=21/3,705.
+  UDP-LAG: zero-duration=36,382/366,461.
+  WEBDDOS: zero-duration=0/439.
+  zero-duration rows: rows=36,403; attacks=36,382; benign=21
+  BENIGN probability min/median/p90/p99/p99.9/max=3.7694324e-05/4.5566989e-05/6.9065298e-05/8.8863904e-05/8.9093786e-05/8.9119329e-05
+  ATTACK probability min/median/p90/p99/p99.9/max=1.4324466e-05/9.7152562e-05/0.00031679606/0.0051454208/0.011468427/0.029797908
+  non-zero-duration rows: rows=334,202; attacks=330,518; benign=3,684
+  BENIGN probability min/median/p90/p99/p99.9/max=3.4754837e-06/1.4165262e-05/0.00030418462/0.381939/0.39800816/0.76114898
+  ATTACK probability min/median/p90/p99/p99.9/max=4.8052784e-06/5.2955546e-05/0.0024257398/0.017991824/0.27604875/0.99918217
+
+Capture-separated validation experiment (temporary in-memory candidate; no artifact written)
+  Train captures: Monday-WorkingHours.pcap_ISCX.csv, Thursday-WorkingHours-Afternoon-Infilteration.pcap_ISCX.csv, Thursday-WorkingHours-Morning-WebAttacks.pcap_ISCX.csv, Tuesday-WorkingHours.pcap_ISCX.csv
+  Calibration capture: Friday-WorkingHours-Morning.pcap_ISCX.csv (benign-only threshold quantile; target FPR=0.100%)
+  Validation capture: Wednesday-workingHours.pcap_ISCX.csv (precision-recall curve and fixed-threshold comparisons)
+  Candidate sampled training rows=96,051; train benign=80,000; train attack=16,051
+  Calibration rows=191,033; validation rows=692,703
+  Candidate threshold from calibration benign scores=0.0101101690
+  Validation average precision=0.966692
+  PR curve points=74,411; saved to reports\generalized_validation_precision_recall.csv
+  Threshold comparisons below are on validation only; threshold selection used calibration capture, not validation or UDPLag.
+  Default 0.5 diagnostic: {'threshold': 0.5, 'tn': 440005, 'fp': 26, 'fn': 250030, 'tp': 2642, 'precision': 0.9902548725637181, 'recall': 0.010456243667679837, 'f1': 0.020693976658572883, 'macro_f1': 0.3997092025716404, 'benign_precision': 0.6376560609244458, 'benign_recall': 0.9999409132538389, 'benign_f1': 0.7787244284847079, 'benign_support': 440031, 'attack_support': 252672, 'balanced_accuracy': 0.5051985784607594, 'benign_fpr': 5.908674616106593e-05, 'accuracy': 0.6390141229358036}
+  Saved production threshold (cross-model comparison only): {'threshold': 0.9916187806666924, 'tn': 440031, 'fp': 0, 'fn': 252527, 'tp': 145, 'precision': 1.0, 'recall': 0.0005738665146909828, 'f1': 0.001147074761586444, 'macro_f1': 0.3890913492260434, 'benign_precision': 0.6353706115588875, 'benign_recall': 1.0, 'benign_f1': 0.7770356236905003, 'benign_support': 440031, 'attack_support': 252672, 'balanced_accuracy': 0.5002869332573455, 'benign_fpr': 0.0, 'accuracy': 0.6354469375764217}
+  Candidate threshold calibrated on separate capture: {'threshold': 0.010110169015990142, 'tn': 439680, 'fp': 351, 'fn': 159277, 'tp': 93395, 'precision': 0.996255840249184, 'recall': 0.3696294009625127, 'f1': 0.5392040829287161, 'macro_f1': 0.6927830599169291, 'benign_precision': 0.7340760688997707, 'benign_recall': 0.9992023289268256, 'benign_f1': 0.8463620369051422, 'benign_support': 440031, 'attack_support': 252672, 'balanced_accuracy': 0.6844158649446691, 'benign_fpr': 0.00079767107317439, 'accuracy': 0.7695578047157295}
+  Limitation: this is CIC-IDS2017 cross-capture validation of a temporary binary CIC detector, not UDP-lag validation and not an independent final test.
+
+Frozen behavioral-rule capture audit (flow-level; all local CIC captures have prior development/calibration exposure)
+  Source-flow threshold: >2,085 flows/source/minute.
+  Multiport condition: >54 unique destination ports in the source-minute, plus source-flow threshold.
+  Per-capture metrics saved to reports\behavioral_capture_diagnostics.csv; source-burst event counts are separate from flow-flag counts.
+  Precision/recall/F1/balanced accuracy are blank for captures with only one ground-truth class; their confusion counts and benign FPR remain available.
+  These rows are not an untouched final-performance estimate because source-rate/port-diversity thresholds were derived using CIC captures and the project's previous reports examined DDoS/PortScan captures.
+
+No production model, threshold, or model artifact was modified or replaced.
