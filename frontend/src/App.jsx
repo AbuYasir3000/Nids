@@ -1,18 +1,19 @@
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  ShieldCheck,
   Activity,
-  Network,
   AlertTriangle,
-  Upload,
-  LayoutDashboard,
-  FileWarning,
   CheckCircle2,
-  Zap,
+  Download,
+  Eye,
+  FileText,
+  Moon,
+  Network,
   RefreshCw,
   Server,
-  Download,
+  ShieldCheck,
+  Sun,
+  Upload,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -28,21 +29,197 @@ import {
 } from "recharts";
 import "./App.css";
 
+const APP_NAME = "Argus";
 const API_URL = "http://127.0.0.1:8000";
-const PIE_COLORS = ["#2f3a44", "#f2b134"];
-const BAR_BENIGN = "#4a8f78";
-const BAR_ATTACK = "#ff6b5e";
+const PIE_COLORS = ["var(--chart-neutral)", "var(--warn)"];
+const BAR_BENIGN = "var(--chart-benign)";
+const BAR_ATTACK = "var(--danger)";
 const TOOLTIP_STYLE = {
-  background: "#181d22",
-  border: "1px solid #333d47",
+  background: "var(--surface)",
+  border: "1px solid var(--line-strong)",
   borderRadius: 8,
-  color: "#e8ecef",
+  color: "var(--text)",
   fontSize: 12,
+  boxShadow: "0 6px 20px rgba(0,0,0,0.15)",
 };
+const AXIS_TICK = { fontSize: 12, fill: "var(--dim)" };
 const EMPTY_CLASS_COUNTS = Object.freeze({});
 const EMPTY_PREVIEW_ROWS = Object.freeze([]);
 
-function StatCard({ icon: Icon, title, value, subtitle, tone = "neutral" }) {
+function initialTheme() {
+  try {
+    const saved = localStorage.getItem("argus-theme");
+    if (saved === "light" || saved === "dark") return saved;
+  } catch {
+    /* storage unavailable */
+  }
+  return "dark";
+}
+
+const FIELD_PALETTE = {
+  idle: ["57,255,136", "205,255,225"],
+  ok: ["57,255,136", "205,255,225"],
+  warn: ["245,185,68", "255,228,165"],
+  danger: ["255,77,106", "255,196,202"],
+};
+
+/* Animated network field: nodes drift, packets travel to the protected core.
+   Colour and packet rate follow the analysis result. */
+function NetworkField({ tone, busy }) {
+  const canvasRef = useRef(null);
+  const liveRef = useRef({ tone, busy });
+
+  useEffect(() => {
+    liveRef.current = { tone, busy };
+  }, [tone, busy]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return undefined;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return undefined;
+    const reduce = window.matchMedia?.(
+      "(prefers-reduced-motion: reduce)"
+    ).matches;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const nodes = [];
+    let w = 0;
+    let h = 0;
+    let raf = 0;
+    const rand = (a, b) => a + Math.random() * (b - a);
+
+    function resize() {
+      const rect = canvas.getBoundingClientRect();
+      w = rect.width;
+      h = rect.height;
+      canvas.width = Math.max(1, Math.round(w * dpr));
+      canvas.height = Math.max(1, Math.round(h * dpr));
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      nodes.length = 0;
+      const count = Math.round(Math.min(64, Math.max(22, (w * h) / 9000)));
+      for (let i = 0; i < count; i += 1) {
+        nodes.push({
+          x: rand(0, w),
+          y: rand(0, h),
+          vx: rand(-0.14, 0.14),
+          vy: rand(-0.14, 0.14),
+          r: rand(1.2, 2.8),
+        });
+      }
+    }
+
+    function draw(time) {
+      const { tone: t, busy: isBusy } = liveRef.current;
+      const [c1] = FIELD_PALETTE[t] || FIELD_PALETTE.idle;
+      const cx = w * 0.5;
+      const cy = h * 0.47;
+      ctx.clearRect(0, 0, w, h);
+
+      for (const n of nodes) {
+        if (!reduce) {
+          n.x += n.vx;
+          n.y += n.vy;
+          if (n.x < 0 || n.x > w) n.vx *= -1;
+          if (n.y < 0 || n.y > h) n.vy *= -1;
+        }
+      }
+      for (let i = 0; i < nodes.length; i += 1) {
+        for (let j = i + 1; j < nodes.length; j += 1) {
+          const dx = nodes[i].x - nodes[j].x;
+          const dy = nodes[i].y - nodes[j].y;
+          const d = Math.hypot(dx, dy);
+          if (d < 130) {
+            ctx.strokeStyle = `rgba(80,150,255,${(1 - d / 130) * 0.24})`;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(nodes[i].x, nodes[i].y);
+            ctx.lineTo(nodes[j].x, nodes[j].y);
+            ctx.stroke();
+          }
+        }
+      }
+      for (const n of nodes) {
+        ctx.fillStyle = "rgba(130,185,255,0.7)";
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // pulsing rings around the protected core
+      for (let k = 0; k < 3; k += 1) {
+        const phase = ((time / (isBusy ? 900 : 2200) + k / 3) % 1);
+        ctx.strokeStyle = `rgba(${c1},${(1 - phase) * 0.4})`;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(cx, cy, 30 + phase * 110, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, 60);
+      glow.addColorStop(0, `rgba(${c1},0.55)`);
+      glow.addColorStop(1, `rgba(${c1},0)`);
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 60, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = `rgb(${c1})`;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 9, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,0.9)";
+      ctx.beginPath();
+      ctx.arc(cx, cy, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+
+    }
+
+    function loop(time) {
+      draw(time);
+      raf = requestAnimationFrame(loop);
+    }
+
+    resize();
+    if (reduce) {
+      draw(0);
+    } else {
+      raf = requestAnimationFrame(loop);
+    }
+    const observer = new ResizeObserver(() => {
+      resize();
+      if (reduce) draw(0);
+    });
+    observer.observe(canvas);
+    return () => {
+      cancelAnimationFrame(raf);
+      observer.disconnect();
+    };
+  }, []);
+
+  return <canvas ref={canvasRef} className="hero-canvas" aria-hidden="true" />;
+}
+
+function CountUp({ value }) {
+  const [shown, setShown] = useState(0);
+
+  useEffect(() => {
+    const reduce = window.matchMedia?.(
+      "(prefers-reduced-motion: reduce)"
+    ).matches;
+    const duration = reduce ? 0 : 900;
+    const start = performance.now();
+    let raf = 0;
+    const tick = (now) => {
+      const t = duration ? Math.min(1, (now - start) / duration) : 1;
+      setShown(Math.round(value * (1 - (1 - t) ** 3)));
+      if (t < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [value]);
+
+  return <>{shown.toLocaleString()}</>;
+}
+
+function StatCard({ icon: Icon, title, raw, share, subtitle, tone = "neutral" }) {
   return (
     <div className="stat-card" data-tone={tone}>
       <div className="stat-top">
@@ -51,7 +228,14 @@ function StatCard({ icon: Icon, title, value, subtitle, tone = "neutral" }) {
         </span>
         <span>{title}</span>
       </div>
-      <div className="stat-value">{value}</div>
+      <div className="stat-value">
+        {raw === null || raw === undefined ? "—" : <CountUp value={raw} />}
+      </div>
+      {share !== undefined && (
+        <div className="stat-bar" aria-hidden="true">
+          <i style={{ width: `${Math.min(100, Math.max(0, share * 100))}%` }} />
+        </div>
+      )}
       <div className="stat-subtitle">{subtitle}</div>
     </div>
   );
@@ -81,29 +265,18 @@ export default function App() {
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [apiStatus, setApiStatus] = useState("Checking");
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
+  const [theme, setTheme] = useState(initialTheme);
 
-  async function checkAPI() {
-    setApiStatus("Checking");
-
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
     try {
-      const response = await fetch(`${API_URL}/health`);
-      if (!response.ok) throw new Error("API unavailable");
-
-      const data = await response.json();
-      setApiStatus(
-        !data.detector_ready
-          ? "Models unavailable"
-          : data.generalized_model_ready
-            ? "Online"
-            : "Generalization model missing"
-      );
+      localStorage.setItem("argus-theme", theme);
     } catch {
-      setApiStatus("Offline");
+      /* storage unavailable */
     }
-  }
+  }, [theme]);
 
   async function analyzeFile() {
     if (!file || loading) return;
@@ -297,85 +470,164 @@ export default function App() {
       "recognise this traffic pattern; review the Behavioral Heuristic panel below.";
   }
 
+  // Moves the specular highlight on whichever glass card the pointer is over.
+  function trackLight(event) {
+    const card = event.target.closest?.(".panel, .stat-card, .verdict");
+    if (!card) return;
+    const rect = card.getBoundingClientRect();
+    card.style.setProperty("--mx", `${event.clientX - rect.left}px`);
+    card.style.setProperty("--my", `${event.clientY - rect.top}px`);
+  }
+
   return (
     <div className="app-shell">
-      <aside className="sidebar">
-        <div className="brand">
-          <div className="brand-logo">
-            <ShieldCheck size={25} />
-          </div>
-          <div>
-            <h2>
-              Sentinel<span>AI</span>
-            </h2>
-            <p>NETWORK DEFENSE</p>
+      <aside className="hero">
+        <NetworkField tone={results ? verdictTone : "idle"} busy={loading} />
+        <div className="hero-top">
+          <div className="brand">
+            <div className="brand-logo">
+              <Eye size={19} />
+            </div>
+            <h2>{APP_NAME}</h2>
           </div>
         </div>
 
-        <div className="nav-label">WORKSPACE</div>
-        <a className="nav-item active" href="#dashboard">
-          <LayoutDashboard size={18} /> Dashboard
-        </a>
-        <a className="nav-item" href="#traffic">
-          <Network size={18} /> Prediction Charts
-        </a>
-        <a className="nav-item" href="#threats">
-          <FileWarning size={18} /> Threat Detection
-        </a>
-        <a className="nav-item" href="#analyze">
-          <Upload size={18} /> Analyze Dataset
-        </a>
+        <div className="hero-title">
+          <h2>Network</h2>
+          <span className="hero-chip">
+            <Network size={13} /> Hybrid intrusion detection
+          </span>
+        </div>
 
-        <div className="sidebar-bottom">
-          <div className="system-status">
-            <span
-              className={`status-dot ${
-                apiStatus === "Online" ? "" : "status-warning"
-              }`}
-            />
-            <div>
-              <strong>
-                {apiStatus === "Online" ? "Models Online" : apiStatus}
-              </strong>
-              <small>Python detection service</small>
+        {results && (
+          <div className="hero-cards">
+            <div className="hero-card">
+              <small>Flows analyzed</small>
+              <strong>{totalFlows.toLocaleString()}</strong>
+            </div>
+            <div className="hero-card" data-tone={verdictTone}>
+              <small>Verdict</small>
+              <strong>{verdictTone === "ok" ? "Clear" : verdictTone === "warn" ? "Rule alert" : "Attack"}</strong>
             </div>
           </div>
-          <p className="version">HYBRID NIDS · DEVELOPMENT</p>
-        </div>
+        )}
+
       </aside>
 
-      <main className="main-content" id="dashboard">
+      <main
+        className="main-content"
+        id="dashboard"
+        onPointerMove={trackLight}
+      >
         <header className="topbar">
           <div>
-            <p className="eyebrow">SECURITY OPERATIONS CENTER</p>
-            <h1>Network Overview</h1>
+            <p className="eyebrow">Network intrusion detection</p>
+            <h1>Traffic Analysis</h1>
           </div>
-          <button className="api-button" onClick={checkAPI}>
-            <RefreshCw size={15} />
-            <span>API: {apiStatus}</span>
-          </button>
+          <div className="topbar-actions">
+            <button
+              className="icon-button"
+              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
+              title="Toggle theme"
+            >
+              {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+            </button>
+          </div>
         </header>
 
-        {!results && (
-          <section className="welcome-panel">
+        <section className="panel analyze-panel" id="analyze">
+          <div className="panel-heading">
             <div>
-              <div className="welcome-tag">
-                <Zap size={13} /> HYBRID DETECTION
-              </div>
-              <h2>
-                Network flow analysis, <span>models plus rules.</span>
-              </h2>
+              <h3>Analyze a capture</h3>
               <p>
-                Upload a CIC flow CSV or a PCAP capture. Random Forest,
-                Isolation Forest and behavioral rules each report separately,
-                so you can see where they agree and where they do not.
+                Upload a CIC flow CSV or a PCAP / PCAPNG capture. Random
+                Forest, Isolation Forest and behavioral rules report
+                separately.
               </p>
             </div>
-            <a className="welcome-cta" href="#analyze">
-              <Upload size={16} /> Upload capture
-            </a>
-          </section>
-        )}
+          </div>
+
+          <div className="analyze-row">
+            <label className="drop-zone">
+              <span className="drop-icon">
+                {file ? <FileText size={20} /> : <Upload size={20} />}
+              </span>
+              <span className="drop-text">
+                <strong>{file ? file.name : "Choose a CSV or PCAP file"}</strong>
+                <small>
+                  {file
+                    ? `${(file.size / 1024 / 1024).toFixed(2)} MB`
+                    : "CSV, PCAP or PCAPNG · up to 20 GiB"}
+                </small>
+              </span>
+              <input
+                type="file"
+                accept=".csv,.pcap,.pcapng,.pcap10,text/csv,application/vnd.tcpdump.pcap"
+                onChange={handleFile}
+              />
+            </label>
+
+            <button
+              className="analyze-button"
+              disabled={!file || loading}
+              onClick={analyzeFile}
+            >
+              {loading ? (
+                <RefreshCw className="spin" size={16} />
+              ) : (
+                <Activity size={16} />
+              )}
+              {loading ? "Analyzing traffic..." : "Analyze Network Traffic"}
+            </button>
+          </div>
+
+          {error && (
+            <div className="error-message" role="alert">
+              <strong>Analysis failed</strong>
+              <p>{error}</p>
+            </div>
+          )}
+
+          {results && (
+            <div className="result-message">
+              <div className="result-success">
+                <CheckCircle2 size={17} />
+                <strong>Analysis completed</strong>
+              </div>
+              <dl className="result-facts">
+                <div>
+                  <dt>File</dt>
+                  <dd>{results.filename}</dd>
+                </div>
+                <div>
+                  <dt>Total flows</dt>
+                  <dd>{totalFlows.toLocaleString()}</dd>
+                </div>
+                <div>
+                  <dt>Anomalies</dt>
+                  <dd>{anomalyCount.toLocaleString()}</dd>
+                </div>
+                <div>
+                  <dt>Table preview</dt>
+                  <dd>{results.preview_rows ?? previewRows.length} rows</dd>
+                </div>
+              </dl>
+              <button
+                className="download-button"
+                onClick={downloadFullCSV}
+                disabled={!results.download_url}
+              >
+                <Download size={15} /> Download full results CSV
+              </button>
+            </div>
+          )}
+
+          <p className="upload-note">
+            PCAP conversion requires CICFlowMeter on the API server. No fixed
+            flow-count limit.
+          </p>
+        </section>
 
         {results && (
           <section
@@ -399,24 +651,22 @@ export default function App() {
           <StatCard
             icon={Activity}
             title="Analyzed Flows"
-            value={results ? totalFlows.toLocaleString() : "—"}
-            subtitle={results ? results.filename : "Upload a CSV to begin"}
+            raw={results ? totalFlows : null}
+            subtitle={results ? results.filename : "Upload a capture to begin"}
           />
           <StatCard
             icon={AlertTriangle}
             title="Non-Benign Predictions"
-            value={
-              results ? predictedNonBenign.toLocaleString() : "—"
-            }
+            raw={results ? predictedNonBenign : null}
+            share={results && totalFlows ? predictedNonBenign / totalFlows : 0}
             subtitle="Based on predicted classes"
             tone={results && predictedNonBenign > 0 ? "danger" : "neutral"}
           />
           <StatCard
             icon={ShieldCheck}
             title="Learned Binary Attack Flags"
-            value={
-              results ? generalizedAttackCount.toLocaleString() : "—"
-            }
+            raw={results ? generalizedAttackCount : null}
+            share={results && totalFlows ? generalizedAttackCount / totalFlows : 0}
             subtitle={
               results
                 ? "Calibrated classifier only; behavior rules are separate"
@@ -427,7 +677,8 @@ export default function App() {
           <StatCard
             icon={AlertTriangle}
             title="Behavioral Alerts"
-            value={results ? behavioralFlowCount.toLocaleString() : "—"}
+            raw={results ? behavioralFlowCount : null}
+            share={results && totalFlows ? behavioralFlowCount / totalFlows : 0}
             subtitle={
               results
                 ? topBehavioralEvent
@@ -442,7 +693,8 @@ export default function App() {
           <StatCard
             icon={CheckCircle2}
             title="Anomalies"
-            value={results ? anomalyCount.toLocaleString() : "—"}
+            raw={results ? anomalyCount : null}
+            share={results && totalFlows ? anomalyCount / totalFlows : 0}
             subtitle={
               results && totalFlows
                 ? `${((anomalyCount / totalFlows) * 100).toFixed(2)}% flagged`
@@ -516,7 +768,9 @@ export default function App() {
         )}
 
         {results && behavioralFindings && (
-          <section className="panel behavioral-summary">
+          <section
+            className={`panel behavioral-summary${behavioralFlowCount === 0 ? " is-clear" : ""}`}
+          >
             <div className="panel-heading">
               <div>
                 <h3>Behavioral Heuristic (separate from model predictions)</h3>
@@ -573,26 +827,26 @@ export default function App() {
                       }}
                     >
                       <CartesianGrid
-                        stroke="#242b32"
+                        stroke="var(--line)"
                         strokeDasharray="4 4"
                         vertical={false}
                       />
                       <XAxis
                         dataKey="name"
-                        stroke="#8c98a4"
+                        stroke="var(--line-strong)"
                         tickLine={false}
                         axisLine={false}
                         interval={0}
                         angle={-25}
                         textAnchor="end"
                         height={60}
-                        tick={{ fontSize: 11 }}
+                        tick={AXIS_TICK}
                       />
                       <YAxis
-                        stroke="#8c98a4"
+                        stroke="var(--line-strong)"
                         tickLine={false}
                         axisLine={false}
-                        tick={{ fontSize: 11 }}
+                        tick={AXIS_TICK}
                       />
                       <Tooltip
                         contentStyle={TOOLTIP_STYLE}
@@ -710,7 +964,7 @@ export default function App() {
           </div>
         </section>
 
-        <section className="bottom-grid">
+        <section className="threats-section">
           <div className="panel threats-panel" id="threats">
             <div className="panel-heading">
               <div>
@@ -754,82 +1008,10 @@ export default function App() {
               </div>
             )}
           </div>
-
-          <div className="panel upload-panel" id="analyze">
-            <div className="panel-heading">
-              <div>
-                <h3>Analyze a Dataset</h3>
-                <p>Run your trained Python models</p>
-              </div>
-              <Upload size={19} />
-            </div>
-
-            <label className="drop-zone">
-              <Upload size={27} />
-              <strong>{file ? file.name : "Choose a CSV or PCAP file"}</strong>
-              <span>
-                {file
-                  ? `${(file.size / 1024 / 1024).toFixed(2)} MB`
-                  : "CSV, PCAP, or PCAPNG traffic capture"}
-              </span>
-              <input
-                type="file"
-                accept=".csv,.pcap,.pcapng,.pcap10,text/csv,application/vnd.tcpdump.pcap"
-                onChange={handleFile}
-              />
-            </label>
-
-            <button
-              className="analyze-button"
-              disabled={!file || loading}
-              onClick={analyzeFile}
-            >
-              {loading ? (
-                <RefreshCw className="spin" size={17} />
-              ) : (
-                <Activity size={17} />
-              )}
-              {loading ? "Analyzing traffic..." : "Analyze Network Traffic"}
-            </button>
-
-            {error && (
-              <div className="error-message">
-                <strong>Analysis failed</strong>
-                <p>{error}</p>
-              </div>
-            )}
-
-            {results && (
-              <div className="result-message">
-                <div className="result-success">
-                  <CheckCircle2 size={18} />
-                  <strong>Analysis completed</strong>
-                </div>
-                <p>File: {results.filename}</p>
-                <p>Total flows: {totalFlows.toLocaleString()}</p>
-                <p>Anomalies: {anomalyCount.toLocaleString()}</p>
-                <p>
-                  Table preview: {results.preview_rows ?? previewRows.length} rows
-                </p>
-                <button
-                  className="download-button"
-                  onClick={downloadFullCSV}
-                  disabled={!results.download_url}
-                >
-                  <Download size={15} /> Download Full Results CSV
-                </button>
-              </div>
-            )}
-
-            <p className="upload-note">
-              Maximum 20 GiB per upload with no fixed flow-count limit. PCAP
-              conversion requires CICFlowMeter on the API server.
-            </p>
-          </div>
         </section>
 
         {results && (
-          <section className="panel results-panel">
+          <section className="panel results-panel" id="results">
             <div className="panel-heading results-heading">
               <div>
                 <h3>Detection Results</h3>
@@ -911,11 +1093,6 @@ export default function App() {
             )}
           </section>
         )}
-
-        <footer>
-          SentinelAI · Hybrid Network Intrusion Detection System · Student
-          project
-        </footer>
       </main>
     </div>
   );

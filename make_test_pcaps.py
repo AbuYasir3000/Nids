@@ -1,4 +1,4 @@
-"""Create labelled synthetic test captures for SentinelAI (files only; nothing is sent
+"""Create labelled synthetic test captures for Argus (files only; nothing is sent
 on any network). Output goes to ./test_pcaps together with ground_truth.csv.
 
     python make_test_pcaps.py

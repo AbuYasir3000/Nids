@@ -1,4 +1,4 @@
-"""One-command accuracy check for SentinelAI.
+"""One-command accuracy check for Argus.
 
 Runs every detector (Random Forest, binary classifier, Isolation Forest and
 the behavioral rule) on labelled data and prints one table.
@@ -169,7 +169,7 @@ def main():
         })
     per_class = pd.DataFrame(per_class).sort_values("flows", ascending=False)
 
-    lines = ["# SentinelAI accuracy check", "", *[f"- {n}" for n in notes], "",
+    lines = ["# Argus accuracy check", "", *[f"- {n}" for n in notes], "",
              "## Overall (BENIGN vs attack, per flow)", "", md_table(show), "",
              f"Random Forest exact-class accuracy on classes it was trained on: **{rf_multi:.1%}** "
              f"({int(supported.sum()):,} flows)" if supported.any() else

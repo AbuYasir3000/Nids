@@ -1,6 +1,6 @@
 # Hybrid AI Network Intrusion Detection System
 
-A final year project that explores supervised and anomaly based detection on network flow records from the CIC-IDS2017 dataset. The project contains a Random Forest classifier, an Isolation Forest anomaly detector, offline evaluation scripts, a FastAPI service, a Streamlit demo, and a React dashboard.
+A final year project that explores supervised and anomaly based detection on network flow records from the CIC-IDS2017 dataset. The project contains a Random Forest classifier, an Isolation Forest anomaly detector, offline evaluation scripts, a FastAPI service, and a React dashboard.
 
 ## What it does
 
@@ -63,7 +63,6 @@ Two caveats worth stating in any write-up. First, in `UDPLag.csv` only the first
 - `src/evaluate_*.py`: held-out capture evaluation scripts.
 - `api.py`: FastAPI upload and analysis service.
 - `src/pcap_converter.py`: PCAP-to-flow conversion and feature-column alignment.
-- `app.py`: Streamlit demo.
 - `frontend/`: React + Vite dashboard.
 - `data/`: local dataset files (not committed).
 - `models/`: locally trained model files (not committed).
@@ -96,7 +95,7 @@ python -m pip install -r requirements-pcap.txt
 
 Restart the API after installing it. CSV uploads continue to work without this optional package. PCAP conversion runs on the API server, uses CICFlowMeter to create flow records, and has a 4-hour conversion timeout per capture. Classic PCAP files using Linux cooked capture v2 are adapted to Ethernet framing before extraction.
 
-Uploads may be up to 20 GiB; converted flow CSV output may be up to 40 GiB. There is no fixed flow-count limit. Large captures need substantial free disk space in the system temporary directory and enough memory to hold the flow data and analysis results. The Streamlit upload limit is configured in `.streamlit/config.toml`.
+Uploads may be up to 20 GiB; converted flow CSV output may be up to 40 GiB. There is no fixed flow-count limit. Large captures need substantial free disk space in the system temporary directory and enough memory to hold the flow data and analysis results.
 
 The trained model files and CIC-IDS2017 dataset are intentionally not tracked by Git. Put the expected model artifacts in `models/` and dataset CSVs under `data/raw/` or `data/processed/` as required by each script. See the CIC-IDS2017 source and license/terms before redistribution: https://www.unb.ca/cic/datasets/ids-2017.html
 
@@ -125,12 +124,6 @@ Start the React dashboard in another terminal:
 ```powershell
 cd frontend
 npm run dev
-```
-
-The Streamlit demo can also be started from the repository root:
-
-```powershell
-streamlit run app.py
 ```
 
 CSV and PCAP uploads must provide all 80 saved model features. CIC CSV time fields are kept in their existing microsecond units. PCAP conversion maps Python CICFlowMeter's seconds to the model's microseconds for duration, IAT, active, and idle fields; rates remain per second. The duplicate `Fwd Header Length.1` training column is copied from its verified identical `Fwd Header Length` value when the extractor emits it only once. Unsupported schemas are rejected instead of silently filling entire missing columns with training medians. Individual invalid or missing values are handled by the saved training medians, and each result row reports how many feature values were imputed. PCAP flows have no ground-truth labels, so uploads do not produce label-based accuracy metrics.

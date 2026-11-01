@@ -228,7 +228,7 @@ def main():
     output_txt = REPORT_DIR / "ddos_feature_drift_summary.txt"
 
     with output_txt.open("w", encoding="utf-8") as file:
-        file.write("SentinelAI Feature-Drift Analysis\n")
+        file.write("Argus Feature-Drift Analysis\n")
         file.write("=" * 40 + "\n\n")
         file.write(f"Held-out file: {HELD_OUT_FILE}\n")
         file.write(f"Reference sampled rows: {len(X_reference):,}\n")

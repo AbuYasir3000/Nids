@@ -41,7 +41,7 @@ RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(
-    title="SentinelAI NIDS API",
+    title="Argus NIDS API",
     description="Hybrid AI Network Intrusion Detection System",
     version="1.2.0",
 )
@@ -62,7 +62,7 @@ detector_error = None
 
 try:
     detector = HybridNIDS()
-    print("SentinelAI models loaded successfully.")
+    print("Argus models loaded successfully.")
 except Exception as exc:
     detector_error = f"{type(exc).__name__}: {exc}"
     print(f"Model loading failed: {detector_error}")
@@ -71,7 +71,7 @@ except Exception as exc:
 @app.get("/")
 def home():
     return {
-        "name": "SentinelAI NIDS API",
+        "name": "Argus NIDS API",
         "status": "online",
         "detector_ready": detector is not None,
         "generalized_model_ready": bool(getattr(detector, "generalized_model_ready", False)),

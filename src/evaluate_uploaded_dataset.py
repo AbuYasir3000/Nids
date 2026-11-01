@@ -1,4 +1,4 @@
-"""Evaluate the saved SentinelAI detectors against one labeled flow CSV.
+"""Evaluate the saved Argus detectors against one labeled flow CSV.
 
 This script is read-only with respect to input data and model artifacts. It
 reports the saved models' predictions without fitting, calibrating, or tuning.
@@ -323,7 +323,7 @@ def main() -> int:
     predictions = {}
     model_classes = list(rf_artifact["model"].classes_)
     report_lines = [
-        "SentinelAI labeled CSV evaluation",
+        "Argus labeled CSV evaluation",
         "==================================",
         f"Input: {input_path}",
         f"Rows: {len(frame):,}; labeled rows: {len(valid_rows):,}; excluded unlabeled rows: {len(frame) - len(valid_rows):,}",
