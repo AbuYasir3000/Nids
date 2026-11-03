@@ -56,22 +56,18 @@ function initialTheme() {
   return "dark";
 }
 
-const FIELD_PALETTE = {
-  idle: ["57,255,136", "205,255,225"],
-  ok: ["57,255,136", "205,255,225"],
-  warn: ["245,185,68", "255,228,165"],
-  danger: ["255,77,106", "255,196,202"],
-};
+// The pulsing core is always blue; the rest of the field is green.
+const CORE_RGB = "70,140,255";
 
 /* Animated network field: nodes drift, packets travel to the protected core.
    Colour and packet rate follow the analysis result. */
-function NetworkField({ tone, busy }) {
+function NetworkField({ busy }) {
   const canvasRef = useRef(null);
-  const liveRef = useRef({ tone, busy });
+  const liveRef = useRef({ busy });
 
   useEffect(() => {
-    liveRef.current = { tone, busy };
-  }, [tone, busy]);
+    liveRef.current = { busy };
+  }, [busy]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -109,8 +105,8 @@ function NetworkField({ tone, busy }) {
     }
 
     function draw(time) {
-      const { tone: t, busy: isBusy } = liveRef.current;
-      const [c1] = FIELD_PALETTE[t] || FIELD_PALETTE.idle;
+      const { busy: isBusy } = liveRef.current;
+      const c1 = CORE_RGB;
       const cx = w * 0.5;
       const cy = h * 0.47;
       ctx.clearRect(0, 0, w, h);
@@ -129,7 +125,7 @@ function NetworkField({ tone, busy }) {
           const dy = nodes[i].y - nodes[j].y;
           const d = Math.hypot(dx, dy);
           if (d < 130) {
-            ctx.strokeStyle = `rgba(80,150,255,${(1 - d / 130) * 0.24})`;
+            ctx.strokeStyle = `rgba(57,255,136,${(1 - d / 130) * 0.22})`;
             ctx.lineWidth = 1;
             ctx.beginPath();
             ctx.moveTo(nodes[i].x, nodes[i].y);
@@ -139,7 +135,7 @@ function NetworkField({ tone, busy }) {
         }
       }
       for (const n of nodes) {
-        ctx.fillStyle = "rgba(130,185,255,0.7)";
+        ctx.fillStyle = "rgba(140,255,190,0.7)";
         ctx.beginPath();
         ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
         ctx.fill();
@@ -482,7 +478,7 @@ export default function App() {
   return (
     <div className="app-shell">
       <aside className="hero">
-        <NetworkField tone={results ? verdictTone : "idle"} busy={loading} />
+        <NetworkField busy={loading} />
         <div className="hero-top">
           <div className="brand">
             <div className="brand-logo">

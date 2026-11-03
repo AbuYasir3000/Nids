@@ -9,8 +9,8 @@
 :root,
 :root[data-theme="dark"] {
   --bg: #050607;
-  --bg-glow-1: rgba(57, 255, 136, 0.1);
-  --bg-glow-2: rgba(40, 110, 255, 0.12);
+  --bg-glow-1: rgba(57, 255, 136, 0.03);
+  --bg-glow-2: rgba(40, 110, 255, 0.06);
   --surface: #0b0f0e;
   --surface-2: #111715;
   --surface-3: #19211e;
@@ -28,7 +28,7 @@
   --chart-benign: #3d7bff;
   --chart-neutral: #1f2a27;
   --shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
-  --panel-bg: rgba(4, 6, 6, 0.8);
+  --panel-bg: #040505;
   color-scheme: dark;
 }
 
@@ -1167,44 +1167,16 @@ tbody tr:last-child td {
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  border: 1px solid rgba(170, 255, 210, 0.16);
-  background:
-    radial-gradient(620px 420px at 88% -4%, rgba(57, 255, 136, 0.13), transparent 70%),
-    radial-gradient(520px 440px at 4% 102%, rgba(40, 110, 255, 0.16), transparent 70%),
-    linear-gradient(145deg, rgba(14, 24, 20, 0.6), rgba(3, 5, 5, 0.9) 55%, rgba(8, 13, 12, 0.78));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(160deg, #0a0c0c, #040505 60%, #030404);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.14),
-    inset 0 0 90px rgba(57, 255, 136, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
     0 26px 70px rgba(0, 0, 0, 0.6);
 }
 
 .main-content::before,
 .main-content::after {
-  /* slow drifting light behind the glass so the blur has something to refract */
-  content: "";
-  position: absolute;
-  z-index: -1;
-  border-radius: 50%;
-  filter: blur(70px);
-  pointer-events: none;
-}
-
-.main-content::before {
-  top: -120px;
-  right: 8%;
-  width: 380px;
-  height: 380px;
-  background: rgba(57, 255, 136, 0.26);
-  animation: orbA 18s ease-in-out infinite alternate;
-}
-
-.main-content::after {
-  bottom: 6%;
-  left: -80px;
-  width: 340px;
-  height: 340px;
-  background: rgba(40, 110, 255, 0.3);
-  animation: orbB 22s ease-in-out infinite alternate;
+  display: none;
 }
 
 .panel,
@@ -1525,4 +1497,22 @@ thead {
 
 td {
   color: var(--text);
+}
+
+/* Analyze button: strong contrast in every state */
+.analyze-button {
+  color: #021409;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.analyze-button:disabled {
+  opacity: 1;
+  border: 1px solid rgba(57, 255, 136, 0.5);
+  background: rgba(57, 255, 136, 0.1);
+  color: #8dffbd;
+  text-shadow: none;
+  box-shadow: none;
 }
